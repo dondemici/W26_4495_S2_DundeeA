@@ -11,7 +11,7 @@ https://nemsis.org/
 ## Project Team
 | Student Name | Student ID | Email |
 |--------------|------------|-------|
-| Dundee Adriatico | 300393449 | adriaticom@student.douglascollege.ca |
+| Dundee Adriatico | 300XXXXXX | adriaticom@student.douglascollege.ca |
 
 ## Company Details (Riipen)
 - **Partner**: Solaris Canada
