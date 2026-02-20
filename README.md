@@ -32,25 +32,17 @@ Work‑related exposure events among EMS clinicians (e.g., blood and body fluid 
 ### Key features:
 
 - Sidebar controls:
-#### Model selector (Prophet default, SARIMA option).
+#### - Model selector (Prophet default, SARIMA option).
+#### - Forecast horizon slider (weeks ahead).
+#### - Toggles for Major events and Weather effects (wired to synthetic placeholders now; planned integration with real APIs later).
+#### - Option to show Original vs Updated forecast to illustrate how new data shifts predictions.
 
-Forecast horizon slider (weeks ahead).
-
-Toggles for Major events and Weather effects (wired to synthetic placeholders now; planned integration with real APIs later).
-
-Option to show Original vs Updated forecast to illustrate how new data shifts predictions.
-
-Main view:
-
-Summary panel (last historical week, selected model, forecast horizon).
-
-Chart of historical weekly exposures plus forecast and uncertainty band.
-
-Table of forecasted values with lower/upper bounds.
-
-Optional chart comparing original vs updated forecast.
-
-Narrative explanation written for non‑technical EMS managers.
+- Main view:
+#### - Summary panel (last historical week, selected model, forecast horizon).
+#### - Chart of historical weekly exposures plus forecast and uncertainty band.
+#### - Table of forecasted values with lower/upper bounds.
+#### - Optional chart comparing original vs updated forecast.
+#### - Narrative explanation written for non‑technical EMS managers.
 
 Overall, the project is moving towards a practical forecasting product that supports proactive injury‑prevention decisions in EMS operations, leveraging the large NEMSIS public‑release dataset.
 
@@ -58,84 +50,64 @@ Overall, the project is moving towards a practical forecasting product that supp
 These instructions explain how to set up the repository locally and run the Streamlit demo.
 
 ### 1. Clone the repository
-bash
-git clone https://github.com/dondemici/W26_4495_S2_DundeeA.git
-cd W26_4495_S2_DundeeA
+- git clone https://github.com/dondemici/W26_4495_S2_DundeeA.git
+- cd W26_4495_S2_DundeeA
 
 ### 2. Create and activate a virtual environment (recommended)
 Using venv:
-
-bash
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS/Linux
-source .venv/bin/activate
+- python -m venv .venv
+#### Windows
+- .venv\Scripts\activate
+#### macOS/Linux
+- source .venv/bin/activate
 
 ### 3. Install Python dependencies
 If you have a requirements.txt in the repo (recommended), run:
 
-bash
-pip install -r requirements.txt
-If not, install the core packages manually (adjust as needed for the repo):
+- pip install -r requirements.txt
 
-bash
-pip install streamlit pandas numpy plotly prophet statsmodels sqlalchemy pyodbc
+If not, install the core packages manually (adjust as needed for the repo):
+- pip install streamlit pandas numpy plotly prophet statsmodels sqlalchemy pyodbc
 
 ## Usage – See a Demo of the Product
 You can run the Streamlit prototype locally to see the forecasting workflow end‑to‑end.
 
-From the repository root, locate the Streamlit app file (for example):
+### From the repository root, locate the Streamlit app file (for example):
+- app.py or
+- streamlit_app.py (Use the actual filename from your repo.)
 
-app.py or
+### Run the Streamlit app:
+- streamlit run app.py
+  
+### Open the provided local URL (usually http://localhost:8501) in your browser.
 
-streamlit_app.py
-(Use the actual filename from your repo.)
+### In the app:
+- Select the model (Prophet default or SARIMA).
+- Choose the forecast horizon in weeks.
+- Optionally toggle Major events and Weather effects (currently placeholder / synthetic integrations).
+- Click Run forecast to generate:
+#### - Historical vs forecast chart.
+#### - Forecast table with bounds.
+#### - Narrative explanation.
 
-Run the Streamlit app:
-
-bash
-streamlit run app.py
-Open the provided local URL (usually http://localhost:8501) in your browser.
-
-In the app:
-
-Select the model (Prophet default or SARIMA).
-
-Choose the forecast horizon in weeks.
-
-Optionally toggle Major events and Weather effects (currently placeholder / synthetic integrations).
-
-Click Run forecast to generate:
-
-Historical vs forecast chart.
-
-Forecast table with bounds.
-
-Narrative explanation.
-
-To see the Original vs Updated forecast behavior, enable the checkbox in the sidebar and run the forecast again. The app will show how an updated series (with higher recent exposure counts) shifts the forecast upward, illustrating how the production system would respond to new weekly data.
+### To see the Original vs Updated forecast behavior, enable the checkbox in the sidebar and run the forecast again. The app will show how an updated series (with higher recent exposure counts) shifts the forecast upward, illustrating how the production system would respond to new weekly data.
 
 ## Reproducing Data Pipeline Work (Optional)
 If you have access to the NEMSIS Public‑Release Research Dataset and a SQL Server environment:
-
-Use the SQL scripts in the sql/ or notebooks/ folders (if present) to:
-
-Create staging tables for PCR_Events, FACTPCRWorkRelatedExposure, and related FACTPCR time tables.
-
-Run joins that filter to work‑related exposure = “Yes” and exclude “Not Applicable” / “Not Recorded”.
-
-Export or query the result from Jupyter notebooks to build the weekly time series.
+- Use the SQL scripts in the sql/ or notebooks/ folders (if present) to:
+#### - Create staging tables for PCR_Events, FACTPCRWorkRelatedExposure, and related FACTPCR time tables.
+#### - Run joins that filter to work‑related exposure = “Yes” and exclude “Not Applicable” / “Not Recorded”.
+#### - Export or query the result from Jupyter notebooks to build the weekly time series.
 
 Note: Due to NEMSIS data distribution policies, this repository does not include raw NEMSIS data files; researchers must request access directly from NEMSIS.
 
 ## Project Team
-Student: Dundee Adriatico
-Student ID: 300393449
-Email: adriaticom@student.douglascollege.ca
+- Student: Dundee Adriatico
+- Student ID: 300393449
+- Email: adriaticom@student.douglascollege.ca
 
 Company Details (Riipen)
-Partner: Solaris Canada
-Contact: Tony Tsui, CEO – tonytsui.solaris@gmail.com
 
-Scope: Data analysis and forecasting for EMS operations using the public NEMSIS dataset.
+- Partner: Solaris Canada
+- Contact: Tony Tsui, CEO – tonytsui.solaris@gmail.com
+- Scope: Data analysis and forecasting for EMS operations using the public NEMSIS dataset.
