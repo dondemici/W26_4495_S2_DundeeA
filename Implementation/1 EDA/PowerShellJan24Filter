@@ -1,0 +1,81 @@
+$inputPath  = "D:\Downloads\ASCII_64 2024\Pub_PCRevents.txt"
+$outputPath = "D:\Downloads\ASCII_64 2024\Pub_PCRevents_Jan2024.txt"
+
+$start = Get-Date "2024-01-01"
+$end   = Get-Date "2024-02-01"
+
+$delimiter = "~|~"
+
+$reader = [System.IO.StreamReader]::new($inputPath)
+$writer = [System.IO.StreamWriter]::new($outputPath, $false)
+
+try {
+    $headerLine = $reader.ReadLine()
+    $writer.WriteLine($headerLine)
+
+    $headers = $headerLine -split [regex]::Escape($delimiter) | ForEach-Object { $_.Trim() }
+
+    # find eOutcome_11 as before
+    $colIndex = ($headers | ForEach-Object { $_ } |
+        Select-Object @{Name='Name'; Expression={$_}}, @{Name='Index'; Expression={[array]::IndexOf($headers, $_)}} |
+        Where-Object { $_.Name -like '*eOutcome_11*' } |
+        Select-Object -First 1
+    ).Index
+
+    if ($null -eq $colIndex -or $colIndex -lt 0) {
+        throw "Could not locate eOutcome_11. Headers: $($headers -join ', ')"
+    }
+
+    # line counter
+    $lineCount = 0
+
+    while (-not $reader.EndOfStream) {
+        $line = $reader.ReadLine()
+        $lineCount++
+
+        # checkpoint every 100k lines
+        if ($lineCount % 100000 -eq 0) {
+            Write-Host "Processed $lineCount lines..." -ForegroundColor Cyan
+        }
+
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+
+        $cols = $line -split [regex]::Escape($delimiter), $headers.Count
+        if ($cols.Count -le $colIndex) { continue }
+
+        $raw = $cols[$colIndex].Trim()
+        if ([string]::IsNullOrWhiteSpace($raw)) { continue }
+
+        if ($raw -eq 'NOT APPLICABLE' -or $raw -eq 'NOT RECORDED') {
+            continue
+        }
+
+        $firstColon = $raw.IndexOf(":")
+        if ($firstColon -ge 0) {
+            $normalized = $raw.Substring(0, $firstColon) + " " + $raw.Substring($firstColon + 1)
+        } else {
+            $normalized = $raw
+        }
+
+        try {
+            $dt = [datetime]::ParseExact(
+                $normalized,
+                "ddMMMyyyy HH:mm:ss",
+                [Globalization.CultureInfo]::InvariantCulture
+            )
+
+            if ($dt -ge $start -and $dt -lt $end) {
+                $writer.WriteLine($line)
+            }
+        }
+        catch {
+            # Bad date -> skip
+        }
+    }
+
+    Write-Host "Done. Total lines processed: $lineCount" -ForegroundColor Green
+}
+finally {
+    $reader.Close()
+    $writer.Close()
+}

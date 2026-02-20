@@ -1,0 +1,28 @@
+USE EMSData;
+GO
+
+DROP TABLE IF EXISTS dbo.PCR_Jan2024;
+GO
+
+SELECT *
+INTO dbo.PCR_Jan2024
+FROM dbo.PCR_Staging
+WHERE LTRIM(eOutcome_11) NOT IN ('Not Recorded', 'Not Applicable')
+  AND TRY_CONVERT(
+        datetime2,
+        CONCAT(
+            SUBSTRING(LTRIM(eOutcome_11), 1, 2), ' ',
+            SUBSTRING(LTRIM(eOutcome_11), 3, 3), ' ',
+            SUBSTRING(LTRIM(eOutcome_11), 6, 4), ' ',
+            SUBSTRING(LTRIM(eOutcome_11), 11, 8)
+        )
+      ) >= '2024-01-01'
+  AND TRY_CONVERT(
+        datetime2,
+        CONCAT(
+            SUBSTRING(LTRIM(eOutcome_11), 1, 2), ' ',
+            SUBSTRING(LTRIM(eOutcome_11), 3, 3), ' ',
+            SUBSTRING(LTRIM(eOutcome_11), 6, 4), ' ',
+            SUBSTRING(LTRIM(eOutcome_11), 11, 8)
+        )
+      ) <  '2024-02-01';

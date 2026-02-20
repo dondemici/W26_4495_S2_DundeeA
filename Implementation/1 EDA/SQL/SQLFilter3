@@ -1,0 +1,12 @@
+SELECT *
+INTO dbo.PCR_Jan2024
+FROM dbo.PCR_Staging
+WHERE LTRIM(eOutcome_11) NOT IN ('Not Recorded', 'Not Applicable')
+  AND TRY_CONVERT(
+        datetime,
+        REPLACE(LTRIM(eOutcome_11), ':', ' ')
+      ) >= '2024-01-01'
+  AND TRY_CONVERT(
+        datetime,
+        REPLACE(LTRIM(eOutcome_11), ':', ' ')
+      ) <  '2024-02-01';

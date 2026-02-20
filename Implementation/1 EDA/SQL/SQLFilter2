@@ -1,0 +1,12 @@
+USE EMSData;
+GO
+
+BULK INSERT dbo.PCR_Staging
+FROM 'D:\Downloads\ASCII_64 2024\Pub_PCRevents.txt'
+WITH (
+    FIRSTROW       = 2,               -- skip header line
+    FIELDTERMINATOR = '~|~',
+    ROWTERMINATOR   = '\n',
+    TABLOCK,
+    BATCHSIZE       = 250000          -- optional: good for big files
+);

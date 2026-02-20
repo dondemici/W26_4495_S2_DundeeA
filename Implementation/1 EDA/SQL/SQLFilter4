@@ -1,0 +1,19 @@
+SELECT DB_NAME() AS CurrentDatabase;
+
+USE EMSData;
+GO
+
+SELECT *
+FROM sys.tables
+WHERE name = 'PCR_Jan2024';
+
+SELECT TOP (10) *
+FROM dbo.PCR_Jan2024;
+
+SELECT TOP (10) *
+FROM dbo.PCR_Staging;
+
+
+SELECT 
+    (SELECT COUNT(*) FROM dbo.PCR_Staging)   AS StagingRows,
+    (SELECT COUNT(*) FROM dbo.PCR_Jan2024)   AS JanRows;

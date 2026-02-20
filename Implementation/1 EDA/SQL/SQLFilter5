@@ -1,0 +1,21 @@
+USE EMSData;
+GO
+
+SELECT TOP (20)
+    eOutcome_11,
+    LTRIM(eOutcome_11) AS Trimmed,
+    SUBSTRING(LTRIM(eOutcome_11), 1, 2)  AS dd,
+    SUBSTRING(LTRIM(eOutcome_11), 3, 3)  AS mon,
+    SUBSTRING(LTRIM(eOutcome_11), 6, 4)  AS yyyy,
+    SUBSTRING(LTRIM(eOutcome_11), 11, 8) AS hhmmss,
+    TRY_CONVERT(
+        datetime2,
+        CONCAT(
+            SUBSTRING(LTRIM(eOutcome_11), 1, 2), ' ',
+            SUBSTRING(LTRIM(eOutcome_11), 3, 3), ' ',
+            SUBSTRING(LTRIM(eOutcome_11), 6, 4), ' ',
+            SUBSTRING(LTRIM(eOutcome_11), 11, 8)
+        )
+    ) AS Parsed
+FROM dbo.PCR_Staging
+WHERE LTRIM(eOutcome_11) LIKE '01JAN2024%';
