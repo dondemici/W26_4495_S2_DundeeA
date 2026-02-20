@@ -70,14 +70,13 @@ If not, install the core packages manually (adjust as needed for the repo):
 - pip install streamlit pandas numpy plotly prophet statsmodels sqlalchemy pyodbc
 
 ## Usage – See a Demo of the Product
-You can run the Streamlit prototype locally to see the forecasting workflow end‑to‑end.
+Run the Streamlit prototype locally to see the forecasting workflow end‑to‑end.
 
-### From the repository root, locate the Streamlit app file (for example):
-- app.py or
-- streamlit_app.py (Use the actual filename from your repo.)
+### From the repository root, locate the Streamlit app file (W26_4495_S2_DundeeA/Implementation/Product/):
+- ems_forecaster_app.py
 
 ### Run the Streamlit app:
-- streamlit run app.py
+- streamlit run ems_forecaster_app.py
   
 ### Open the provided local URL (usually http://localhost:8501) in your browser.
 
