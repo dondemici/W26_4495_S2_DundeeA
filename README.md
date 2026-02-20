@@ -5,19 +5,15 @@ Predicting weekly work-related exposure events among Emergency Medical Services 
 ## Project / Product Description
 This repository contains the code and assets for my Douglas College CSIS 4495 Riipen project with Solaris Canada. The current midterm prototype focuses on:
 
-### Outcome: Work‑related exposure events among EMS clinicians (e.g., blood and body fluid exposures), identified from NEMSIS work‑related exposure coding and filtered to “Yes” cases only.
+### Outcome: 
+Work‑related exposure events among EMS clinicians (e.g., blood and body fluid exposures), identified from NEMSIS work‑related exposure coding and filtered to “Yes” cases only.
 
 ### Data layer:
-
-SQL Server pipeline reading large NEMSIS v3 tables (e.g., PCR_Events, FACTPCRWorkRelatedExposure, FACTPCR time data).
-
-Staging tables used to query tens of millions of records efficiently from Jupyter.
-
-Cleaning and exploration of January 2024 (~90K rows) to validate exposure fields and coding.
-
-Identification that hospital admit time (eOutcome11) is not usable for exposure cases (mostly “Not Applicable”), leading to the adoption of FACTPCR operational times as the main time source.
-
-In‑progress construction of a 2024 weekly work‑related exposure time series (~20K exposure events expected).
+- SQL Server pipeline reading large NEMSIS v3 tables (e.g., PCR_Events, FACTPCRWorkRelatedExposure, FACTPCR time data).
+- Staging tables used to query tens of millions of records efficiently from Jupyter.
+- Cleaning and exploration of January 2024 (~90K rows) to validate exposure fields and coding.
+- Identification that hospital admit time (eOutcome11) is not usable for exposure cases (mostly “Not Applicable”), leading to the adoption of FACTPCR operational times as the main time source.
+- In‑progress construction of a 2024 weekly work‑related exposure time series (~20K exposure events expected).
 
 ### Scope decisions & constraints:
 
