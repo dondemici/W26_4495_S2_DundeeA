@@ -5,9 +5,9 @@ Predicting weekly work-related exposure events among Emergency Medical Services 
 ## Project / Product Description
 This repository contains the code and assets for my Douglas College CSIS 4495 Riipen project with Solaris Canada. The current midterm prototype focuses on:
 
-Outcome: Work‑related exposure events among EMS clinicians (e.g., blood and body fluid exposures), identified from NEMSIS work‑related exposure coding and filtered to “Yes” cases only.
+### Outcome: Work‑related exposure events among EMS clinicians (e.g., blood and body fluid exposures), identified from NEMSIS work‑related exposure coding and filtered to “Yes” cases only.
 
-Data layer:
+### Data layer:
 
 SQL Server pipeline reading large NEMSIS v3 tables (e.g., PCR_Events, FACTPCRWorkRelatedExposure, FACTPCR time data).
 
@@ -19,13 +19,13 @@ Identification that hospital admit time (eOutcome11) is not usable for exposure 
 
 In‑progress construction of a 2024 weekly work‑related exposure time series (~20K exposure events expected).
 
-Scope decisions & constraints:
+### Scope decisions & constraints:
 
 NEMSIS public data does not include detailed provider injury mechanisms at the national level; this information is only available in some state‑level systems, so the project models when exposures occur, not the exact cause.
 
 Midterm prototype uses a synthetic weekly baseline series that mimics realistic exposure patterns while the full PCR‑time join and aggregation are completed.
 
-Model layer:
+### Model layer:
 
 Model‑agnostic design: the app can plug in SARIMA, Prophet, or simpler baseline forecasters depending on signal strength in the final weekly series.
 
@@ -35,11 +35,11 @@ Point forecasts for future weekly exposure counts.
 
 Simple lower/upper bounds for each week.
 
-Application layer (product):
+### Application layer (product):
 
 A Streamlit web app called EMS Work‑Related Exposure Forecaster that EMS leaders can open in a browser and use as if it were a production tool.
 
-Key features:
+### Key features:
 
 Sidebar controls:
 
@@ -65,14 +65,15 @@ Narrative explanation written for non‑technical EMS managers.
 
 Overall, the project is moving towards a practical forecasting product that supports proactive injury‑prevention decisions in EMS operations, leveraging the large NEMSIS public‑release dataset.
 
-Installation
+## Installation
 These instructions explain how to set up the repository locally and run the Streamlit demo.
 
-1. Clone the repository
+### 1. Clone the repository
 bash
 git clone https://github.com/dondemici/W26_4495_S2_DundeeA.git
 cd W26_4495_S2_DundeeA
-2. Create and activate a virtual environment (recommended)
+
+### 2. Create and activate a virtual environment (recommended)
 Using venv:
 
 bash
@@ -81,7 +82,8 @@ python -m venv .venv
 .venv\Scripts\activate
 # macOS/Linux
 source .venv/bin/activate
-3. Install Python dependencies
+
+### 3. Install Python dependencies
 If you have a requirements.txt in the repo (recommended), run:
 
 bash
@@ -90,7 +92,8 @@ If not, install the core packages manually (adjust as needed for the repo):
 
 bash
 pip install streamlit pandas numpy plotly prophet statsmodels sqlalchemy pyodbc
-Usage – See a Demo of the Product
+
+## Usage – See a Demo of the Product
 You can run the Streamlit prototype locally to see the forecasting workflow end‑to‑end.
 
 From the repository root, locate the Streamlit app file (for example):
@@ -124,7 +127,7 @@ Narrative explanation.
 
 To see the Original vs Updated forecast behavior, enable the checkbox in the sidebar and run the forecast again. The app will show how an updated series (with higher recent exposure counts) shifts the forecast upward, illustrating how the production system would respond to new weekly data.
 
-Reproducing Data Pipeline Work (Optional)
+## Reproducing Data Pipeline Work (Optional)
 If you have access to the NEMSIS Public‑Release Research Dataset and a SQL Server environment:
 
 Use the SQL scripts in the sql/ or notebooks/ folders (if present) to:
@@ -137,16 +140,13 @@ Export or query the result from Jupyter notebooks to build the weekly time serie
 
 Note: Due to NEMSIS data distribution policies, this repository does not include raw NEMSIS data files; researchers must request access directly from NEMSIS.
 
-Project Team
+## Project Team
 Student: Dundee Adriatico
-
-Student ID: 300XXXXXX
-
+Student ID: 300393449
 Email: adriaticom@student.douglascollege.ca
 
 Company Details (Riipen)
 Partner: Solaris Canada
-
 Contact: Tony Tsui, CEO – tonytsui.solaris@gmail.com
 
 Scope: Data analysis and forecasting for EMS operations using the public NEMSIS dataset.
