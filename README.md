@@ -22,8 +22,8 @@ Work‑related exposure events among EMS clinicians (e.g., blood and body fluid 
 ### Model layer:
 - Model‑agnostic design: the app can plug in SARIMA, Prophet, or simpler baseline forecasters depending on signal strength in the final weekly series.
 - Current midterm demo runs on a placeholder forecaster over the synthetic weekly series, producing:
-  #### Point forecasts for future weekly exposure counts.
-  #### Simple lower/upper bounds for each week.
+  #### - Point forecasts for future weekly exposure counts.
+  #### - Simple lower/upper bounds for each week.
 
 ### Application layer (product):
 
