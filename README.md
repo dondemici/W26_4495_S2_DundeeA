@@ -1,7 +1,8 @@
 # EMS Work-Related Exposure Forecasting – Riipen Project
 Predicting weekly work-related exposure events among Emergency Medical Services (EMS) clinicians using the NEMSIS Public-Use Dataset. The project focuses on building a product for EMS managers: a forecasting tool that surfaces high‑risk weeks in advance so they can plan staffing and safety interventions before exposures spike.
 
-Project / Product Description
+
+## Project / Product Description
 This repository contains the code and assets for my Douglas College CSIS 4495 Riipen project with Solaris Canada. The current midterm prototype focuses on:
 
 Outcome: Work‑related exposure events among EMS clinicians (e.g., blood and body fluid exposures), identified from NEMSIS work‑related exposure coding and filtered to “Yes” cases only.
