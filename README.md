@@ -16,18 +16,13 @@ Work‑related exposure events among EMS clinicians (e.g., blood and body fluid 
 - In‑progress construction of a 2024 weekly work‑related exposure time series (~20K exposure events expected).
 
 ### Scope decisions & constraints:
-
-NEMSIS public data does not include detailed provider injury mechanisms at the national level; this information is only available in some state‑level systems, so the project models when exposures occur, not the exact cause.
-
-Midterm prototype uses a synthetic weekly baseline series that mimics realistic exposure patterns while the full PCR‑time join and aggregation are completed.
+- NEMSIS public data does not include detailed provider injury mechanisms at the national level; this information is only available in some state‑level systems, so the project models when exposures occur, not the exact cause.
+- Midterm prototype uses a synthetic weekly baseline series that mimics realistic exposure patterns while the full PCR‑time join and aggregation are completed.
 
 ### Model layer:
-
-Model‑agnostic design: the app can plug in SARIMA, Prophet, or simpler baseline forecasters depending on signal strength in the final weekly series.
-
-Current midterm demo runs on a placeholder forecaster over the synthetic weekly series, producing:
-
-Point forecasts for future weekly exposure counts.
+- Model‑agnostic design: the app can plug in SARIMA, Prophet, or simpler baseline forecasters depending on signal strength in the final weekly series.
+- Current midterm demo runs on a placeholder forecaster over the synthetic weekly series, producing:
+  -- Point forecasts for future weekly exposure counts.
 
 Simple lower/upper bounds for each week.
 
