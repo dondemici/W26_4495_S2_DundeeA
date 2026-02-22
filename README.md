@@ -62,11 +62,7 @@ Using venv:
 - source .venv/bin/activate
 
 ### 3. Install Python dependencies
-If you have a requirements.txt in the repo (recommended), run:
-
-- pip install -r requirements.txt
-
-If not, install the core packages manually (adjust as needed for the repo):
+Install the core packages manually:
 - pip install streamlit pandas numpy plotly prophet statsmodels sqlalchemy pyodbc
 
 ## Usage – See a Demo of the Product
@@ -91,14 +87,6 @@ Run the Streamlit prototype locally to see the forecasting workflow end‑to‑e
 
 ### To see the Original vs Updated forecast behavior, enable the checkbox in the sidebar and run the forecast again. The app will show how an updated series (with higher recent exposure counts) shifts the forecast upward, illustrating how the production system would respond to new weekly data.
 
-## Reproducing Data Pipeline Work (Optional)
-If you have access to the NEMSIS Public‑Release Research Dataset and a SQL Server environment:
-- Use the SQL scripts in the sql/ or notebooks/ folders (if present) to:
-#### - Create staging tables for PCR_Events, FACTPCRWorkRelatedExposure, and related FACTPCR time tables.
-#### - Run joins that filter to work‑related exposure = “Yes” and exclude “Not Applicable” / “Not Recorded”.
-#### - Export or query the result from Jupyter notebooks to build the weekly time series.
-
-Note: Due to NEMSIS data distribution policies, this repository does not include raw NEMSIS data files; researchers must request access directly from NEMSIS.
 
 ## Project Team
 - Student: Dundee Adriatico
