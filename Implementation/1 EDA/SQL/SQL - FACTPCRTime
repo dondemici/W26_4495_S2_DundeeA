@@ -1,0 +1,52 @@
+USE EMSData;
+GO
+
+IF OBJECT_ID('dbo.PCR_Exposure_Minimal', 'U') IS NOT NULL
+    DROP TABLE dbo.PCR_Exposure_Minimal;
+GO
+
+SELECT
+    p.PcrKey,
+    -- time from FACTPCRTIME
+    t.eTimes_03 AS EventTime_raw,
+
+    -- exposure label
+    w.eOther_05 AS ExposureCode,
+    CASE
+        WHEN w.eOther_05 = 9923003 THEN 1   -- Yes
+        WHEN w.eOther_05 = 9923001 THEN 0   -- No
+        ELSE NULL
+    END AS exposure_flag,
+
+    -- a few basic context fields (optional)
+    p.eDispatch_01,
+    p.eDispatch_02,
+    p.eResponse_05,
+    p.eResponse_07,
+    p.eScene_01,
+    p.eScene_06,
+    p.eScene_07,
+    p.eScene_08,
+    p.eScene_09,
+    p.eSituation_01,
+    p.eSituation_02,
+    p.eSituation_07,
+    p.eSituation_08,
+    p.eSituation_13,
+    p.eOutcome_01,
+    p.eOutcome_02,
+    p.ePatient_15,
+    p.ePatient_16
+
+INTO dbo.PCR_Exposure_Minimal
+FROM dbo.PCR_Staging AS p
+LEFT JOIN FACTPCRTIME_raw AS t
+    ON p.PcrKey = t.PcrKey
+LEFT JOIN dbo.FACTPCRWORKRELATEDEXPOSURE_raw AS w
+    ON p.PcrKey = w.PcrKey
+WHERE w.eOther_05 IN (9923001, 9923003);  -- only Yes/No
+-----------
+USE EMSData;
+GO
+SELECT COUNT(*) AS row_count
+FROM dbo.PCR_Exposure_Minimal;
