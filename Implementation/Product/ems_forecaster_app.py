@@ -32,7 +32,7 @@ st.sidebar.header("Forecast settings")
 
 model_choice = st.sidebar.selectbox(
     "Model",
-    ["Prophet (default)", "SARIMA"],
+    ["Prophet (default)", "SARIMA", "Naive", "Moving Average","Exponential Smoothing"],
     index=0
 )
 
