@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+import sqlalchemy as sa
+from sqlalchemy.engine import URL
+
 # ---------- 1. Page config ----------
 st.set_page_config(
     page_title="EMS Injury / Exposure Forecaster",
@@ -14,18 +17,91 @@ st.title("EMS Work‑Related Exposure Forecast")
 st.caption("Prototype app – weekly exposures forecast with SARIMA / Prophet")
 
 # ---------- 2. Fake data for now (replace with your real weekly series) ----------
-def load_fake_weekly_exposures():
+#def load_fake_weekly_exposures():
     # Weekly dates for 2024
-    dates = pd.date_range("2024-01-01", "2024-12-31", freq="W-MON")
-    n = len(dates)
-    # Simple pattern: baseline 10 + seasonal bump + noise
-    seasonal = 3 * np.sin(2 * np.pi * np.arange(n) / 52)
-    counts = 10 + seasonal + np.random.normal(0, 1.5, size=n)
-    counts = np.clip(np.round(counts), 0, None).astype(int)
-    df = pd.DataFrame({"week_start": dates, "exposures": counts})
-    return df
+#   dates = pd.date_range("2024-01-01", "2024-12-31", freq="W-MON")
+#   n = len(dates)
+#    # Simple pattern: baseline 10 + seasonal bump + noise
+#    seasonal = 3 * np.sin(2 * np.pi * np.arange(n) / 52)
+#    counts = 10 + seasonal + np.random.normal(0, 1.5, size=n)
+#    counts = np.clip(np.round(counts), 0, None).astype(int)
+#    df = pd.DataFrame({"week_start": dates, "exposures": counts})
+#    return df
 
-history_df = load_fake_weekly_exposures()
+# history_df = load_fake_weekly_exposures()
+
+# Build SQLAlchemy engine using st.secrets
+@st.cache_resource
+def get_engine():
+    connection_string = (
+        "DRIVER={ODBC Driver 17 for SQL Server};"
+        f"SERVER={st.secrets['server']};"
+        f"DATABASE={st.secrets['database']};"
+        "Trusted_Connection=yes;"
+    )
+    connection_url = URL.create(
+        "mssql+pyodbc",
+        query={"odbc_connect": connection_string},
+    )
+    engine = sa.create_engine(connection_url)
+    return engine
+
+@st.cache_data(ttl=3600)
+def load_weekly_exposures_from_fact():
+    engine = get_engine()
+
+    chunks = pd.read_sql(
+        """
+        SELECT PcrKey, EventTime_raw, exposure_flag
+        FROM dbo.PCR_Exposure_Minimal
+        """,
+        engine,
+        chunksize=100_000,
+    )
+
+    daily_counts = {}
+
+    for chunk in chunks:
+        # 1) Parse datetime exactly as in notebook
+        chunk["event_dt"] = pd.to_datetime(
+            chunk["EventTime_raw"].astype(str).str.strip(),
+            format="%d%b%Y:%H:%M:%S",
+            errors="coerce",
+        )
+
+        # 2) Keep valid datetimes and exposure_flag == 1
+        chunk = chunk[
+            chunk["event_dt"].notna()
+            & (chunk["exposure_flag"] == 1)
+        ]
+
+        # 3) Count per calendar day
+        vc = chunk["event_dt"].dt.date.value_counts()
+        for d, c in vc.items():
+            daily_counts[d] = daily_counts.get(d, 0) + c
+
+    # 4) Build daily series
+    if not daily_counts:
+        return pd.DataFrame(columns=["week_start", "exposures"])
+
+    daily = pd.Series(daily_counts).sort_index()
+    daily.index = pd.to_datetime(daily.index)
+    daily = daily.asfreq("D", fill_value=0)
+    daily.name = "exposure_count"
+
+    # 5) Collapse to weekly (Mon-based) for the app
+    weekly = (
+        daily
+        .resample("W-MON")
+        .sum()
+        .rename("exposures")
+        .reset_index()
+        .rename(columns={"index": "week_start"})
+    )
+
+    return weekly
+
+history_df = load_weekly_exposures_from_fact()
 
 # ---------- 3. Sidebar controls ----------
 st.sidebar.header("Forecast settings")
