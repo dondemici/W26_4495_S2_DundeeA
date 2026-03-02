@@ -6,6 +6,8 @@ import streamlit as st
 
 import sqlalchemy as sa
 from sqlalchemy.engine import URL
+from statsmodels.tsa.holtwinters import SimpleExpSmoothing
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 # ---------- 1. Page config ----------
 st.set_page_config(
@@ -138,6 +140,101 @@ show_original_vs_updated = st.sidebar.checkbox(
 run_button = st.sidebar.button("Run forecast")
 
 # ---------- 4. Simple placeholder forecast function ----------
+# Define extra forecast functions (Naive, Moving Avg, SES, SARIMA)
+def naive_forecast(df, horizon):
+    df = df.sort_values("week_start")
+    last_date = df["week_start"].iloc[-1]
+    last_8_mean = df["exposures"].tail(8).mean()
+
+    future_dates = pd.date_range(
+        last_date + pd.Timedelta(weeks=1),
+        periods=horizon,
+        freq="W-MON"
+    )
+
+    point_forecast = np.full(horizon, last_8_mean)
+    lower = np.clip(point_forecast - 3, 0, None)
+    upper = point_forecast + 3
+
+    return pd.DataFrame({
+        "week_start": future_dates,
+        "yhat": point_forecast,
+        "yhat_lower": lower,
+        "yhat_upper": upper,
+    })
+
+def moving_average_forecast(df, horizon, window=8):
+    df = df.sort_values("week_start")
+    last_date = df["week_start"].iloc[-1]
+    ma_level = df["exposures"].rolling(window).mean().iloc[-1]
+
+    future_dates = pd.date_range(
+        last_date + pd.Timedelta(weeks=1),
+        periods=horizon,
+        freq="W-MON"
+    )
+
+    point_forecast = np.full(horizon, ma_level)
+    lower = np.clip(point_forecast - 3, 0, None)
+    upper = point_forecast + 3
+
+    return pd.DataFrame({
+        "week_start": future_dates,
+        "yhat": point_forecast,
+        "yhat_lower": lower,
+        "yhat_upper": upper,
+    })
+
+def ses_forecast(df, horizon):
+    df = df.sort_values("week_start")
+    y = df["exposures"].astype(float)
+    model = SimpleExpSmoothing(y).fit(optimized=True)
+    fcst_vals = model.forecast(horizon)
+
+    last_date = df["week_start"].iloc[-1]
+    future_dates = pd.date_range(
+        last_date + pd.Timedelta(weeks=1),
+        periods=horizon,
+        freq="W-MON"
+    )
+
+    point_forecast = fcst_vals.values
+    lower = np.clip(point_forecast - 3, 0, None)
+    upper = point_forecast + 3
+
+    return pd.DataFrame({
+        "week_start": future_dates,
+        "yhat": point_forecast,
+        "yhat_lower": lower,
+        "yhat_upper": upper,
+    })
+
+def sarima_forecast(df, horizon):
+    df = df.sort_values("week_start")
+    y = df["exposures"].astype(float)
+    y.index = pd.DatetimeIndex(df["week_start"])
+
+    model = SARIMAX(
+        y,
+        order=(1, 0, 1),
+        seasonal_order=(1, 1, 1, 52),
+        enforce_stationarity=False,
+        enforce_invertibility=False,
+    )
+    results = model.fit(disp=False)
+
+    fcst_obj = results.get_forecast(steps=horizon)
+    mean_fcst = fcst_obj.predicted_mean
+    conf_int = fcst_obj.conf_int(alpha=0.05)
+
+    return pd.DataFrame({
+        "week_start": mean_fcst.index,
+        "yhat": mean_fcst.values,
+        "yhat_lower": conf_int.iloc[:, 0].values,
+        "yhat_upper": conf_int.iloc[:, 1].values,
+    })
+
+
 def simple_naive_forecast(df, horizon):
     """
     Very simple baseline:
@@ -173,8 +270,21 @@ def simple_naive_forecast(df, horizon):
 if not run_button:
     st.info("Set options in the left sidebar, then click **Run forecast**.")
 else:
+    #Switch on model_choice in the main block
+
     # In the future you will branch here for SARIMA vs Prophet
-    forecast_df = simple_naive_forecast(history_df, horizon_weeks)
+    #forecast_df = simple_naive_forecast(history_df, horizon_weeks)
+
+    if model_choice == "Naive":
+        forecast_df = naive_forecast(history_df, horizon_weeks)
+    elif model_choice == "Moving Average":
+        forecast_df = moving_average_forecast(history_df, horizon_weeks)
+    elif model_choice == "Exponential Smoothing":
+        forecast_df = ses_forecast(history_df, horizon_weeks)
+    elif model_choice == "SARIMA":
+        forecast_df = sarima_forecast(history_df, horizon_weeks)
+    else:  # "Prophet (default)" placeholder for now
+        forecast_df = naive_forecast(history_df, horizon_weeks)
 
     # For “original vs updated” demo, pretend updated forecast
     # is based on slightly higher recent trend
