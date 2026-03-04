@@ -8,6 +8,7 @@ import sqlalchemy as sa
 from sqlalchemy.engine import URL
 from statsmodels.tsa.holtwinters import SimpleExpSmoothing
 from statsmodels.tsa.statespace.sarimax import SARIMAX
+from sklearn.ensemble import RandomForestRegressor
 
 # ---------- 1. Page config ----------
 st.set_page_config(
@@ -110,7 +111,8 @@ st.sidebar.header("Forecast settings")
 
 model_choice = st.sidebar.selectbox(
     "Model",
-    ["Prophet (default)", "SARIMA", "Naive", "Moving Average","Exponential Smoothing"],
+    ["Prophet (default)", "SARIMA", "Naive", "Moving Average",
+     "Exponential Smoothing", "ML (Experimental)"],
     index=0
 )
 
@@ -266,6 +268,61 @@ def simple_naive_forecast(df, horizon):
     })
     return fcst
 
+def make_supervised(df, n_lags=4):
+    df = df.sort_values("week_start").copy()
+    for lag in range(1, n_lags+1):
+        df[f"lag_{lag}"] = df["exposures"].shift(lag)
+    df["roll4"] = df["exposures"].rolling(4).mean()
+    df = df.dropna()
+    return df
+
+def ml_forecast(df, horizon, n_lags=4):
+    sup = make_supervised(df, n_lags=n_lags)
+    feature_cols = [c for c in sup.columns if c not in ["week_start", "exposures"]]
+    X = sup[feature_cols]
+    y = sup["exposures"]
+
+    model = RandomForestRegressor(
+        n_estimators=200,
+        max_depth=3,
+        random_state=42
+    )
+    model.fit(X, y)
+
+    # Recursive forecasting
+    last_row = sup.iloc[-1].copy()
+    last_date = df["week_start"].max()
+    forecasts = []
+    dates = []
+
+    current_values = list(df["exposures"].tail(n_lags).values)
+
+    for i in range(horizon):
+        # Build feature vector from current_values
+        feat = {}
+        for lag in range(1, n_lags+1):
+            feat[f"lag_{lag}"] = current_values[-lag]
+        feat["roll4"] = np.mean(current_values[-4:])
+
+        X_future = pd.DataFrame([feat])[feature_cols]
+        y_pred = model.predict(X_future)
+
+        # Append prediction
+        current_values.append(y_pred)
+        dates.append(last_date + pd.Timedelta(weeks=i+1))
+        forecasts.append(y_pred)
+
+    point_forecast = np.array(forecasts)
+    lower = np.clip(point_forecast - 3, 0, None)
+    upper = point_forecast + 3
+
+    return pd.DataFrame({
+        "week_start": dates,
+        "yhat": point_forecast,
+        "yhat_lower": lower,
+        "yhat_upper": upper,
+    })
+
 # ---------- 5. Main logic ----------
 if not run_button:
     st.info("Set options in the left sidebar, then click **Run forecast**.")
@@ -283,7 +340,9 @@ else:
         forecast_df = ses_forecast(history_df, horizon_weeks)
     elif model_choice == "SARIMA":
         forecast_df = sarima_forecast(history_df, horizon_weeks)
-    else:  # "Prophet (default)" placeholder for now
+    elif model_choice == "ML (Experimental)":
+        forecast_df = ml_forecast(history_df, horizon_weeks)
+    else: # "Prophet (default)" placeholder for now
         forecast_df = naive_forecast(history_df, horizon_weeks)
 
     # For “original vs updated” demo, pretend updated forecast
