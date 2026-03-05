@@ -8,7 +8,9 @@ import sqlalchemy as sa
 from sqlalchemy.engine import URL
 from statsmodels.tsa.holtwinters import SimpleExpSmoothing
 from statsmodels.tsa.statespace.sarimax import SARIMAX
+import sklearn
 from sklearn.ensemble import RandomForestRegressor
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
 # ---------- 1. Page config ----------
 st.set_page_config(
@@ -106,14 +108,23 @@ def load_weekly_exposures_from_fact():
 
 history_df = load_weekly_exposures_from_fact()
 
+
 # ---------- 3. Sidebar controls ----------
 st.sidebar.header("Forecast settings")
 
 model_choice = st.sidebar.selectbox(
     "Model",
-    ["Prophet (default)", "SARIMA", "Naive", "Moving Average",
-     "Exponential Smoothing", "ML (Experimental)"],
-    index=0
+    [
+        "Prophet (default)",
+        "Naive",
+        "Moving Average",
+        "Exponential Smoothing",
+        "Holt",
+        "Holt-Winters",
+        "SARIMA",
+        "ML (Experimental)",
+    ],
+    index=0,
 )
 
 horizon_weeks = st.sidebar.slider(
@@ -268,6 +279,76 @@ def simple_naive_forecast(df, horizon):
     })
     return fcst
 
+def holt_forecast(df, horizon):
+    df = df.sort_values("week_start")
+    y = df["exposures"].astype(float)
+
+    model = ExponentialSmoothing(
+        y,
+        trend="add",              # additive trend
+        seasonal=None,
+        initialization_method="estimated",
+    ).fit(optimized=True)
+
+    fcst_vals = model.forecast(horizon)
+
+    last_date = df["week_start"].iloc[-1]
+    future_dates = pd.date_range(
+        last_date + pd.Timedelta(weeks=1),
+        periods=horizon,
+        freq="W-MON",
+    )
+
+    point_forecast = fcst_vals.values
+    lower = np.clip(point_forecast - 3, 0, None)
+    upper = point_forecast + 3
+
+    return pd.DataFrame({
+        "week_start": future_dates,
+        "yhat": point_forecast,
+        "yhat_lower": lower,
+        "yhat_upper": upper,
+    })
+
+def holt_winters_forecast(df, horizon, seasonal_periods=52):
+    df = df.sort_values("week_start")
+    y = df["exposures"].astype(float)
+    
+    if len(y) < 2 * seasonal_periods:
+        raise ValueError(
+            f"Need at least {2 * seasonal_periods} observations for Holt-Winters "
+            f"(got {len(y)}). Use Holt (trend only) instead."
+        )
+
+
+    model = ExponentialSmoothing(
+        y,
+        trend="add",
+        seasonal="add",
+        seasonal_periods=seasonal_periods,
+        initialization_method="estimated",
+    ).fit(optimized=True)
+
+    fcst_vals = model.forecast(horizon)
+
+    last_date = df["week_start"].iloc[-1]
+    future_dates = pd.date_range(
+        last_date + pd.Timedelta(weeks=1),
+        periods=horizon,
+        freq="W-MON",
+    )
+
+    point_forecast = fcst_vals.values
+    lower = np.clip(point_forecast - 3, 0, None)
+    upper = point_forecast + 3
+
+    return pd.DataFrame({
+        "week_start": future_dates,
+        "yhat": point_forecast,
+        "yhat_lower": lower,
+        "yhat_upper": upper,
+    })
+
 def make_supervised(df, n_lags=4):
     df = df.sort_values("week_start").copy()
     for lag in range(1, n_lags+1):
@@ -338,6 +419,11 @@ else:
         forecast_df = moving_average_forecast(history_df, horizon_weeks)
     elif model_choice == "Exponential Smoothing":
         forecast_df = ses_forecast(history_df, horizon_weeks)
+    elif model_choice == "Holt":
+        forecast_df = holt_forecast(history_df, horizon_weeks)
+    elif model_choice == "Holt-Winters" and len(history_df) < 2 * 52:
+        st.warning("Not enough history for Holt-Winters; using Holt instead.")
+        forecast_df = holt_forecast(history_df, horizon_weeks)
     elif model_choice == "SARIMA":
         forecast_df = sarima_forecast(history_df, horizon_weeks)
     elif model_choice == "ML (Experimental)":
