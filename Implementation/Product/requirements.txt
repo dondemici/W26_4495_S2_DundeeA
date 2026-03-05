@@ -1,0 +1,6 @@
+streamlit
+pandas
+numpy
+sqlalchemy
+statsmodels
+scikit-learn
