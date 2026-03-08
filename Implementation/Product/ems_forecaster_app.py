@@ -11,6 +11,8 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 import sklearn
 from sklearn.ensemble import RandomForestRegressor
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from openai import OpenAI
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # ---------- 1. Page config ----------
 st.set_page_config(
@@ -403,6 +405,20 @@ def ml_forecast(df, horizon, n_lags=4):
         "yhat_lower": lower,
         "yhat_upper": upper,
     })
+
+def build_forecast_summary(history_df, forecast_df):
+    last_hist = history_df["week_start"].max().date().isoformat()
+    avg_hist = history_df["exposures"].tail(8).mean()
+
+    next4 = forecast_df.head(4)
+    avg_next4 = next4["yhat"].mean()
+
+    summary = (
+        f"Historical EMS exposures up to {last_hist}, "
+        f"recent 8-week average: {avg_hist:.1f} per week. "
+        f"Forecast average for next 4 weeks: {avg_next4:.1f} per week.\n"
+    )
+    return summary
 
 # ---------- 5. Main logic ----------
 if not run_button:
