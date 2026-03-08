@@ -11,8 +11,10 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 import sklearn
 from sklearn.ensemble import RandomForestRegressor
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
-from openai import OpenAI
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+from google import genai
+
+genai_client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+MODEL_NAME = "gemini-3-flash-preview"  # or any current model
 
 # ---------- 1. Page config ----------
 st.set_page_config(
@@ -420,10 +422,42 @@ def build_forecast_summary(history_df, forecast_df):
     )
     return summary
 
+
+
 # ---------- 5. Main logic ----------
 if not run_button:
     st.info("Set options in the left sidebar, then click **Run forecast**.")
 else:
+    def generate_recommendation(history_df, forecast_df, model_choice, horizon_weeks):
+        summary = build_forecast_summary(history_df, forecast_df)
+
+        prompt = f"""
+You are an EMS operations advisor for a Canadian ambulance service.
+
+Here is a concise summary of recent history and forecast:
+{summary}
+
+Model used: {model_choice}
+Forecast horizon: {horizon_weeks} weeks.
+
+Using this information, write a short, practical recommendation
+(4–6 sentences) for managers:
+- focus on staffing, training, and PPE planning
+- be concrete but not alarmist
+- assume audience is non-technical.
+"""
+
+        response = client.chat.completions.create(
+            model="gemini-1.5-flash",
+            n=1,
+            messages=[
+                {"role": "system", "content": "You are a concise EMS operations advisor."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+
+        return response.choices[0].message.content
+    
     #Switch on model_choice in the main block
 
     # In the future you will branch here for SARIMA vs Prophet
@@ -474,6 +508,15 @@ else:
             f"{horizon_weeks} weeks"
         )
 
+    # Generate AI recommendation based on forecast
+    with st.spinner("Generating manager recommendation..."):
+        try:
+            ai_reco = generate_recommendation(
+                history_df, forecast_df, model_choice, horizon_weeks
+            )
+        except Exception as e:
+            ai_reco = f"(Error generating recommendation: {e})"
+
     # ---------- 5b. Plot historical + forecast ----------
     st.subheader("Historical weekly exposures + forecast")
 
@@ -517,6 +560,8 @@ else:
 
     # ---------- 5d. Narrative explanation ----------
     st.subheader("Interpretation (for managers)")
+
+    # Existing numeric summary if you still want it
     next4 = forecast_df.head(4)
     avg_next4 = next4["yhat"].mean()
     avg_lower = next4["yhat_lower"].mean()
@@ -529,8 +574,11 @@ else:
     )
 
     if use_events:
-        text += "In a future version, major events (concerts, rallies, holidays) will be added as extra predictors to adjust these estimates upward on high‑risk weeks. "
+        text += "In a future version, major events will be added as predictors. "
     if use_weather:
-        text += "Weather (rain, snow, extreme heat) will also be added as regressors to capture environmental effects on injury risk. "
+        text += "Weather will also be added as a regressor. "
 
     st.write(text)
+
+    st.markdown("**AI‑generated operational recommendation**")
+    st.write(ai_reco)
