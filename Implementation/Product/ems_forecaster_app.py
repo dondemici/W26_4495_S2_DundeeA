@@ -12,7 +12,7 @@ import sklearn
 from sklearn.ensemble import RandomForestRegressor
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
-
+import requests  # new
 from google import genai
 
 genai_client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
@@ -56,6 +56,45 @@ def get_engine():
     )
     engine = sa.create_engine(connection_url)
     return engine
+
+# Approx Richmond / Vancouver coordinates
+EMS_LAT = 49.18
+EMS_LON = -123.13
+EMS_TZ = "America/Vancouver"
+
+@st.cache_data(ttl=6*3600)
+def fetch_weather_daily_openmeteo(start_date, end_date,
+                                  lat=EMS_LAT, lon=EMS_LON, timezone=EMS_TZ):
+    """
+    Fetch daily weather (precip, temp, snow) from Open-Meteo between two dates.
+    Dates should be date objects or 'YYYY-MM-DD' strings.
+    """
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "daily": [
+            "precipitation_sum",
+            "temperature_2m_max",
+            "temperature_2m_min",
+            "snowfall_sum",
+        ],
+        "start_date": str(start_date),
+        "end_date": str(end_date),
+        "timezone": timezone,
+    }
+    r = requests.get(url, params=params)
+    r.raise_for_status()
+    data = r.json()
+
+    daily = pd.DataFrame({
+        "date": pd.to_datetime(data["daily"]["time"]),
+        "precip": data["daily"]["precipitation_sum"],
+        "tempmax": data["daily"]["temperature_2m_max"],
+        "tempmin": data["daily"]["temperature_2m_min"],
+        "snow": data["daily"]["snowfall_sum"],
+    })
+    return daily
 
 @st.cache_data(ttl=3600)
 def load_weekly_exposures_from_fact():
@@ -115,6 +154,7 @@ def load_weekly_exposures_from_fact():
 history_df = load_weekly_exposures_from_fact()
 
 
+
 # ---------- 3. Sidebar controls ----------
 st.sidebar.header("Forecast settings")
 
@@ -157,6 +197,45 @@ show_original_vs_updated = st.sidebar.checkbox(
 )
 
 run_button = st.sidebar.button("Run forecast")
+
+
+
+# Weather-enriched history
+if use_weather and not history_df.empty:
+    # Fetch slightly wider window than history, to be safe
+    start = history_df["week_start"].min() - pd.Timedelta(days=7)
+    end = history_df["week_start"].max() + pd.Timedelta(days=7)
+
+    # 1) Get daily weather
+    weather_daily = fetch_weather_daily_openmeteo(start.date(), end.date())
+
+    # 2) Ensure daily frequency and set index for resample
+    weather_daily = weather_daily.set_index("date").asfreq("D")
+
+    # 3) Resample to weekly (Monday-start) to match your exposures
+    weather_weekly = (
+        weather_daily
+        .resample("W-MON")  # Monday as in your exposures
+        .agg({
+            "precip": "sum",
+            "snow": "sum",
+            "tempmax": "mean",
+            "tempmin": "mean",
+        })
+        .reset_index()
+        .rename(columns={"date": "week_start"})
+    )
+
+    # 4) Join onto history_df
+    history_with_weather = pd.merge(
+        history_df,
+        weather_weekly,
+        on="week_start",
+        how="left",
+    )
+else:
+    history_with_weather = history_df.copy()
+
 
 # ---------- 4. Simple placeholder forecast function ----------
 # Define extra forecast functions (Naive, Moving Avg, SES, SARIMA)
@@ -228,10 +307,16 @@ def ses_forecast(df, horizon):
         "yhat_upper": upper,
     })
 
-def sarima_forecast(df, horizon):
-    df = df.sort_values("week_start")
+def sarima_forecast(df, horizon, use_weather=False):
+    df = df.sort_values("week_start").copy()
     y = df["exposures"].astype(float)
     y.index = pd.DatetimeIndex(df["week_start"])
+
+    exog_train = None
+    exog_cols = []
+    if use_weather:
+        exog_cols = ["precip", "snow", "tempmax", "tempmin"]
+        exog_train = df[exog_cols].ffill()
 
     model = SARIMAX(
         y,
@@ -239,10 +324,27 @@ def sarima_forecast(df, horizon):
         seasonal_order=(1, 1, 1, 52),
         enforce_stationarity=False,
         enforce_invertibility=False,
+        exog=exog_train,
     )
     results = model.fit(disp=False)
 
-    fcst_obj = results.get_forecast(steps=horizon)
+    last_date = y.index.max()
+    future_dates = pd.date_range(
+        last_date + pd.Timedelta(weeks=1),
+        periods=horizon,
+        freq="W-MON",
+    )
+
+    exog_future = None
+    if use_weather and exog_train is not None:
+        last_row = exog_train.iloc[-1]
+        exog_future = pd.DataFrame(
+            [last_row.values] * horizon,
+            columns=exog_train.columns,
+            index=future_dates,
+        )
+
+    fcst_obj = results.get_forecast(steps=horizon, exog=exog_future)
     mean_fcst = fcst_obj.predicted_mean
     conf_int = fcst_obj.conf_int(alpha=0.05)
 
@@ -474,7 +576,8 @@ else:
         st.warning("Not enough history for Holt-Winters; using Holt instead.")
         forecast_df = holt_forecast(history_df, horizon_weeks)
     elif model_choice == "SARIMA":
-        forecast_df = sarima_forecast(history_df, horizon_weeks)
+        base_df = history_with_weather if use_weather else history_df
+        forecast_df = sarima_forecast(base_df, horizon_weeks, use_weather=use_weather)
     elif model_choice == "ML (Experimental)":
         forecast_df = ml_forecast(history_df, horizon_weeks)
     else: # "Prophet (default)" placeholder for now
@@ -577,8 +680,15 @@ else:
 
     if use_events:
         text += "In a future version, major events will be added as predictors. "
-    if use_weather:
-        text += "Weather will also be added as a regressor. "
+    # if use_weather:
+    #    text += "Weather will also be added as a regressor. "
+    if use_weather and not history_with_weather.empty:
+        corr_rain = history_with_weather["exposures"].corr(history_with_weather["precip"])
+    text += (
+        f" Historically, weeks with more rain have a correlation of "
+        f"{corr_rain:.2f} with exposure counts, so wet weeks may need "
+        f"a bit more staffing and PPE buffer. "
+    )
 
     st.write(text)
 
