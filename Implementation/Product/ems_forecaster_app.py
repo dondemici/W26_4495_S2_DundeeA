@@ -65,28 +65,31 @@ EMS_TZ = "America/Vancouver"
 @st.cache_data(ttl=6*3600)
 def fetch_weather_daily_openmeteo(start_date, end_date,
                                   lat=EMS_LAT, lon=EMS_LON, timezone=EMS_TZ):
-    """
-    Fetch daily weather (precip, temp, snow) from Open-Meteo between two dates.
-    Dates should be date objects or 'YYYY-MM-DD' strings.
-    """
+    # Clamp to a max range (e.g., 365 days)
+    if (end_date - start_date).days > 365:
+        start_date = end_date - pd.Timedelta(days=365)
+
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
         "latitude": lat,
         "longitude": lon,
-        "daily": [
-            "precipitation_sum",
-            "temperature_2m_max",
-            "temperature_2m_min",
-            "snowfall_sum",
-        ],
+        "daily": "precipitation_sum,temperature_2m_max,temperature_2m_min,snowfall_sum",
         "start_date": str(start_date),
         "end_date": str(end_date),
         "timezone": timezone,
     }
-    r = requests.get(url, params=params)
-    r.raise_for_status()
-    data = r.json()
 
+    r = requests.get(url, params=params)
+    if not r.ok:
+        # Return empty df so app can keep running
+        try:
+            err = r.json().get("reason", r.text)
+        except Exception:
+            err = r.text
+        st.warning(f"Weather API error from Open-Meteo: {err}")
+        return pd.DataFrame(columns=["date", "precip", "tempmax", "tempmin", "snow"])
+
+    data = r.json()
     daily = pd.DataFrame({
         "date": pd.to_datetime(data["daily"]["time"]),
         "precip": data["daily"]["precipitation_sum"],
@@ -202,37 +205,36 @@ run_button = st.sidebar.button("Run forecast")
 
 # Weather-enriched history
 if use_weather and not history_df.empty:
-    # Fetch slightly wider window than history, to be safe
     start = history_df["week_start"].min() - pd.Timedelta(days=7)
     end = history_df["week_start"].max() + pd.Timedelta(days=7)
 
-    # 1) Get daily weather
     weather_daily = fetch_weather_daily_openmeteo(start.date(), end.date())
 
-    # 2) Ensure daily frequency and set index for resample
-    weather_daily = weather_daily.set_index("date").asfreq("D")
+    if not weather_daily.empty:
+        weather_daily = weather_daily.set_index("date").asfreq("D")
+        weather_weekly = (
+            weather_daily
+            .resample("W-MON")
+            .agg({
+                "precip": "sum",
+                "snow": "sum",
+                "tempmax": "mean",
+                "tempmin": "mean",
+            })
+            .reset_index()
+            .rename(columns={"date": "week_start"})
+        )
 
-    # 3) Resample to weekly (Monday-start) to match your exposures
-    weather_weekly = (
-        weather_daily
-        .resample("W-MON")  # Monday as in your exposures
-        .agg({
-            "precip": "sum",
-            "snow": "sum",
-            "tempmax": "mean",
-            "tempmin": "mean",
-        })
-        .reset_index()
-        .rename(columns={"date": "week_start"})
-    )
-
-    # 4) Join onto history_df
-    history_with_weather = pd.merge(
-        history_df,
-        weather_weekly,
-        on="week_start",
-        how="left",
-    )
+        history_with_weather = pd.merge(
+            history_df,
+            weather_weekly,
+            on="week_start",
+            how="left",
+        )
+    else:
+        st.info("Weather data not available; running forecast without weather.")
+        history_with_weather = history_df.copy()
+        use_weather = False  # disable downstream weather logic
 else:
     history_with_weather = history_df.copy()
 
@@ -666,7 +668,7 @@ else:
     # ---------- 5d. Narrative explanation ----------
     st.subheader("Interpretation (for managers)")
 
-    # Existing numeric summary if you still want it
+    # Existing numeric summary
     next4 = forecast_df.head(4)
     avg_next4 = next4["yhat"].mean()
     avg_lower = next4["yhat_lower"].mean()
@@ -680,15 +682,24 @@ else:
 
     if use_events:
         text += "In a future version, major events will be added as predictors. "
-    # if use_weather:
-    #    text += "Weather will also be added as a regressor. "
+
+    # Only compute and append correlation text when weather is enabled AND we have data
     if use_weather and not history_with_weather.empty:
-        corr_rain = history_with_weather["exposures"].corr(history_with_weather["precip"])
-    text += (
-        f" Historically, weeks with more rain have a correlation of "
-        f"{corr_rain:.2f} with exposure counts, so wet weeks may need "
-        f"a bit more staffing and PPE buffer. "
-    )
+        corr_rain = history_with_weather["exposures"].corr(
+            history_with_weather["precip"]
+        )
+        if pd.notna(corr_rain):
+            text += (
+                f" Historically, weeks with more rain have a correlation of "
+                f"{corr_rain:.2f} with exposure counts, so wet weeks may need "
+                f"a bit more staffing and PPE buffer. "
+            )
+        else:
+            # Optional: fallback if correlation cannot be computed
+            text += (
+                " Historically, there is not enough data to estimate how rain "
+                "relates to exposure counts yet. "
+            )
 
     st.write(text)
 
