@@ -1,0 +1,95 @@
+/*----------------------------------------------------------
+-- 1. Base events from PUB_PCREVENTS (single‑entry fields)
+----------------------------------------------------------*/
+WITH BaseEvents AS (
+    SELECT
+        p.PcrKey,                                        -- unique incident key
+        p.eResponse_05,                                  -- Type of Service Requested
+        p.eResponse_07,                                  -- Primary Role of the Unit
+        p.eResponse_23,                                  -- Response Mode to Scene
+        p.eScene_01,                                     -- First EMS Unit on Scene
+        p.eScene_06,                                     -- Number of Patients at Scene
+        p.eScene_07,                                     -- Mass Casualty Incident
+        p.eScene_09,                                     -- Incident Location Type
+        p.eSituation_01,                                 -- Date/Time of Symptom Onset
+        p.eSituation_02,                                 -- Possible Injury
+        p.eDisposition_12,                               -- Incident/Patient Disposition
+        p.eDisposition_16,                               -- EMS Transport Method
+        p.eDisposition_17,                               -- Transport Mode from Scene
+        p.eDisposition_19,                               -- Final Patient Acuity
+        p.eDisposition_21,                               -- Type of Destination
+        p.eOutcome_01,                                   -- ED Disposition
+        p.eOutcome_02                                    -- Hospital Disposition
+    FROM PUB_PCREVENTS_CP25 p
+),
+
+/*----------------------------------------------------------
+-- 2. Work‑related exposure flag from FACTPCRWORKRELATEDEXPOSURE
+--    Keep only true Yes/No values:
+--      9923001 = No, 9923003 = Yes
+--      7701001 = Not Applicable, 7701003 = Not Recorded (exclude)
+----------------------------------------------------------*/
+WorkExposure AS (
+    SELECT
+        w.PcrKey,
+        MAX(CASE 
+                WHEN w.WorkRelatedExposure IN ('9923001','9923003')
+                     THEN w.WorkRelatedExposure
+                ELSE NULL
+            END) AS WorkExposureCode,
+        MAX(CASE 
+                WHEN w.WorkRelatedExposure = '9923003' THEN 1
+                WHEN w.WorkRelatedExposure = '9923001' THEN 0
+                ELSE NULL
+            END) AS IsWorkRelatedExposure
+    FROM FACTPCRWORKRELATEDEXPOSURE w
+    WHERE w.WorkRelatedExposure NOT IN ('7701001','7701003')
+    GROUP BY w.PcrKey
+),
+
+/*----------------------------------------------------------
+-- 3. Computed time variables from COMPUTEDELEMENTS
+--    (replace column names with the actual ones in that table)
+----------------------------------------------------------*/
+ComputedTimes AS (
+    SELECT
+        c.PcrKey,
+        c.UnitNotifiedDatetime,          -- eTimes.01
+        c.UnitEnRouteDatetime,           -- eTimes.03
+        c.UnitArrivedSceneDatetime,      -- eTimes.05
+        c.ArrivedAtPatientDatetime,      -- eTimes.06
+        c.UnitLeftSceneDatetime,         -- eTimes.07
+        c.ArrivedAtDestinationDatetime,  -- eTimes.09
+        c.TransferOfCareDatetime,        -- eTimes.11
+        c.UnitBackInServiceDatetime,     -- eTimes.12
+        c.UnitBackAtHomeDatetime,        -- eTimes.13
+        c.ResponseTimeMinutes,           -- computed interval examples
+        c.SceneTimeMinutes,
+        c.TransportTimeMinutes
+    FROM ComputedElements c
+)
+
+/*----------------------------------------------------------
+-- 4. Final dataset for EMS forecasting app
+----------------------------------------------------------*/
+SELECT
+    b.*,
+    t.UnitNotifiedDatetime,
+    t.UnitEnRouteDatetime,
+    t.UnitArrivedSceneDatetime,
+    t.ArrivedAtPatientDatetime,
+    t.UnitLeftSceneDatetime,
+    t.ArrivedAtDestinationDatetime,
+    t.TransferOfCareDatetime,
+    t.UnitBackInServiceDatetime,
+    t.UnitBackAtHomeDatetime,
+    t.ResponseTimeMinutes,
+    t.SceneTimeMinutes,
+    t.TransportTimeMinutes,
+    w.WorkExposureCode,
+    w.IsWorkRelatedExposure
+FROM BaseEvents b
+LEFT JOIN ComputedTimes t
+    ON b.PcrKey = t.PcrKey
+LEFT JOIN WorkExposure w
+    ON b.PcrKey = w.PcrKey;
