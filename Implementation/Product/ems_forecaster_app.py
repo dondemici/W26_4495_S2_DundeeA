@@ -204,37 +204,54 @@ run_button = st.sidebar.button("Run forecast")
 
 
 # Weather-enriched history
-if use_weather and not history_df.empty:
-    start = history_df["week_start"].min() - pd.Timedelta(days=7)
-    end = history_df["week_start"].max() + pd.Timedelta(days=7)
+# Define allowed weather window (from Open-Meteo error message)
+WEATHER_START = pd.to_datetime("2025-12-08")
 
-    weather_daily = fetch_weather_daily_openmeteo(start.date(), end.date())
+if use_weather:
+    # Keep only weeks where we *can* get weather
+    history_df_weather = history_df[history_df["week_start"] >= WEATHER_START].copy()
 
-    if not weather_daily.empty:
-        weather_daily = weather_daily.set_index("date").asfreq("D")
-        weather_weekly = (
-            weather_daily
-            .resample("W-MON")
-            .agg({
-                "precip": "sum",
-                "snow": "sum",
-                "tempmax": "mean",
-                "tempmin": "mean",
-            })
-            .reset_index()
-            .rename(columns={"date": "week_start"})
+    if history_df_weather.empty or len(history_df_weather) < 16:
+        st.warning(
+            "Not enough overlapping history with available weather data; "
+            "running forecast without weather effects."
         )
-
-        history_with_weather = pd.merge(
-            history_df,
-            weather_weekly,
-            on="week_start",
-            how="left",
-        )
-    else:
-        st.info("Weather data not available; running forecast without weather.")
+        use_weather = False
         history_with_weather = history_df.copy()
-        use_weather = False  # disable downstream weather logic
+    else:
+        # Use trimmed history to drive both exposures + weather
+        history_df = history_df_weather
+        # fetch weather only over this trimmed window
+        start = history_df["week_start"].min() - pd.Timedelta(days=7)
+        end = history_df["week_start"].max() + pd.Timedelta(days=7)
+
+        weather_daily = fetch_weather_daily_openmeteo(start.date(), end.date())
+
+        if not weather_daily.empty:
+            weather_daily = weather_daily.set_index("date").asfreq("D")
+            weather_weekly = (
+                weather_daily
+                .resample("W-MON")
+                .agg({
+                    "precip": "sum",
+                    "snow": "sum",
+                    "tempmax": "mean",
+                    "tempmin": "mean",
+                })
+                .reset_index()
+                .rename(columns={"date": "week_start"})
+            )
+
+            history_with_weather = pd.merge(
+                history_df,
+                weather_weekly,
+                on="week_start",
+                how="left",
+            )
+        else:
+            st.info("Weather data not available; running forecast without weather.")
+            history_with_weather = history_df.copy()
+            use_weather = False
 else:
     history_with_weather = history_df.copy()
 
