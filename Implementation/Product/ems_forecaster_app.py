@@ -199,13 +199,18 @@ show_original_vs_updated = st.sidebar.checkbox(
     value=False
 )
 
+use_ai_recommendation = st.sidebar.checkbox(
+    "Generate AI manager recommendation",
+    value=True
+)
+
 run_button = st.sidebar.button("Run forecast")
 
 
 
 # Weather-enriched history
 # Define allowed weather window (from Open-Meteo error message)
-WEATHER_START = pd.to_datetime("2025-12-08")
+WEATHER_START = pd.to_datetime("2025-03-08")
 
 if use_weather:
     # Keep only weeks where we *can* get weather
@@ -545,6 +550,7 @@ def build_forecast_summary(history_df, forecast_df):
     )
     return summary
 
+# AI Recommendation Input
 def generate_recommendation(history_df, forecast_df, model_choice, horizon_weeks):
         summary = build_forecast_summary(history_df, forecast_df)
 
@@ -682,7 +688,7 @@ else:
 
         st.line_chart(comp)
 
-    # ---------- 5d. Narrative explanation ----------
+        # ---------- 5d. Narrative explanation ----------
     st.subheader("Interpretation (for managers)")
 
     # Existing numeric summary
@@ -700,7 +706,6 @@ else:
     if use_events:
         text += "In a future version, major events will be added as predictors. "
 
-    # Only compute and append correlation text when weather is enabled AND we have data
     if use_weather and not history_with_weather.empty:
         corr_rain = history_with_weather["exposures"].corr(
             history_with_weather["precip"]
@@ -712,7 +717,6 @@ else:
                 f"a bit more staffing and PPE buffer. "
             )
         else:
-            # Optional: fallback if correlation cannot be computed
             text += (
                 " Historically, there is not enough data to estimate how rain "
                 "relates to exposure counts yet. "
@@ -721,4 +725,16 @@ else:
     st.write(text)
 
     st.markdown("**AI‑generated operational recommendation**")
+
+    if use_ai_recommendation:
+        with st.spinner("Generating manager recommendation..."):
+            try:
+                ai_reco = generate_recommendation(
+                    history_df, forecast_df, model_choice, horizon_weeks
+                )
+            except Exception as e:
+                ai_reco = f"(Error generating recommendation: {e})"
+    else:
+        ai_reco = "(AI recommendation skipped – uncheck the box to enable it.)"
+
     st.write(ai_reco)
