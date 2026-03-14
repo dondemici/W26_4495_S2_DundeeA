@@ -22,7 +22,9 @@ MODEL_NAME = "gemini-3-flash-preview"  # or any current model
 st.set_page_config(
     page_title="EMS Injury / Exposure Forecaster",
     layout="wide"
+    
 )
+
 
 st.title("EMS Work‑Related Exposure Forecast")
 st.caption("Prototype app – weekly exposures forecast with SARIMA / Prophet")
@@ -157,56 +159,60 @@ def load_weekly_exposures_from_fact():
 history_df = load_weekly_exposures_from_fact()
 
 
-
 # ---------- 3. Sidebar controls ----------
-st.sidebar.header("Forecast settings")
+# 3a. Inject CSS first (runs on main page but targets sidebar)
+st.markdown("""
+<style>
+[data-testid="stSidebar"] {
+  background-color: #0f172a;
+}
+[data-testid="stSidebar"] * {
+  color: #e5e7eb;
+}
+</style>
+""", unsafe_allow_html=True)
 
-model_choice = st.sidebar.selectbox(
-    "Model",
-    [
-        "Prophet (default)",
-        "Naive",
-        "Moving Average",
-        "Exponential Smoothing",
-        "Holt",
-        "Holt-Winters",
-        "SARIMA",
-        "ML (Experimental)",
-    ],
-    index=0,
-)
+# 3b. All sidebar UI goes inside st.sidebar
+with st.sidebar:
+    st.image("ems_logo.png", use_container_width=True)
+    st.markdown("### EMS Forecaster")
+    st.markdown("---")
 
-horizon_weeks = st.sidebar.slider(
-    "Forecast horizon (weeks)",
-    min_value=4,
-    max_value=24,
-    value=12,
-    step=1
-)
+    st.header("Forecast settings")
 
-use_events = st.sidebar.checkbox(
-    "Include major events (concerts, rallies, holidays)",
-    value=False
-)
+    model_choice = st.selectbox(
+        "Model",
+        [
+            "Prophet (default)",
+            "Naive",
+            "Moving Average",
+            "Exponential Smoothing",
+            "Holt",
+            "Holt-Winters",
+            "SARIMA",
+            "ML (Experimental)",
+        ],
+        index=0,
+    )
 
-use_weather = st.sidebar.checkbox(
-    "Include weather effects (rain/snow)",
-    value=False
-)
+    horizon_weeks = st.slider(
+        "Forecast horizon (weeks)",
+        min_value=4,
+        max_value=24,
+        value=12,
+        step=1,
+    )
 
-show_original_vs_updated = st.sidebar.checkbox(
-    "Show original vs updated forecast",
-    value=False
-)
+    st.markdown("---")
+    st.markdown("**Options**")
 
-use_ai_recommendation = st.sidebar.checkbox(
-    "Generate AI manager recommendation",
-    value=True
-)
+    show_conf = st.checkbox("Show confidence band", value=True)
+    use_events = st.checkbox("Include major events (concerts, rallies, holidays)", value=False)
+    use_weather = st.checkbox("Include weather effects (rain/snow)", value=False)
+    show_original_vs_updated = st.checkbox("Show original vs updated forecast", value=False)
+    use_ai_recommendation = st.checkbox("Generate AI manager recommendation", value=True)
 
-run_button = st.sidebar.button("Run forecast")
-
-
+    run_button = st.button("Run forecast")
 
 # Weather-enriched history
 # Define allowed weather window (from Open-Meteo error message)
