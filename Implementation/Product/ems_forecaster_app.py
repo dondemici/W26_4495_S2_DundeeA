@@ -3,6 +3,7 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 import streamlit as st
+from pathlib import Path
 
 import sqlalchemy as sa
 from sqlalchemy.engine import URL
@@ -172,9 +173,24 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown(
+    """
+    <style>
+    /* Text inside selectboxes, multiselects, etc. */
+    div[data-baseweb="select"] * {
+        color: #000000 !important;  /* black */
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # 3b. All sidebar UI goes inside st.sidebar
+BASE_DIR = Path(__file__).parent
+logo_path = BASE_DIR / "assets" / "ems_logo_s.png"
+
 with st.sidebar:
-    st.image("ems_logo.png", use_container_width=True)
+    st.image(str(logo_path), width="stretch")
     st.markdown("### EMS Forecaster")
     st.markdown("---")
 
