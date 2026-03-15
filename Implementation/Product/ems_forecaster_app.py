@@ -176,7 +176,7 @@ logo_path = BASE_DIR / "assets" / "ems_logo_s.png"
 
 with st.sidebar:
     st.image(str(logo_path), width="stretch")
-    st.markdown("### EMS Forecaster")
+    #st.markdown("### EMS Forecaster")
     st.markdown("---")
 
     st.header("Forecast settings")
@@ -672,18 +672,32 @@ else:
     st.line_chart(chart_data)
 
     # Show prediction interval table (for clarity in demo)
-    st.markdown("**Forecast table (baseline)**")
-    st.dataframe(
-        forecast_df[["week_start", "yhat", "yhat_lower", "yhat_upper"]]
-        .rename(columns={
-            "week_start": "Week start",
-            "yhat": "Forecast",
-            "yhat_lower": "Lower",
-            "yhat_upper": "Upper"
-        })
-    )
 
-    # ---------- 5c. Original vs updated overlay ----------
+    st.markdown("**Forecast table (baseline)**")
+    #st.dataframe(
+    #    forecast_df[["week_start", "yhat", "yhat_lower", "yhat_upper"]]
+    #    .rename(columns={
+    #        "week_start": "Week start",
+    #        "yhat": "Forecast",
+    #        "yhat_lower": "Lower",
+    #        "yhat_upper": "Upper"
+    #    })
+    #)
+    table_df = (
+    forecast_df[["week_start", "yhat", "yhat_lower", "yhat_upper"]]
+    .rename(columns={
+        "week_start": "Week start",
+        "yhat": "Forecast",
+        "yhat_lower": "Lower",
+        "yhat_upper": "Upper"
+    })
+)
+    st.data_editor(
+        table_df,
+        hide_index=True,
+        disabled=True,  # make it read-only like a table    
+    )
+        # ---------- 5c. Original vs updated overlay ----------
     if show_original_vs_updated and updated_forecast_df is not None:
         st.subheader("Original vs updated forecast (illustration)")
 
