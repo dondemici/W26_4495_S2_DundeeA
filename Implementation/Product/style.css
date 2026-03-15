@@ -1,0 +1,27 @@
+/* 1) Main content text = black on white */
+[data-testid="stAppViewContainer"] * {
+  color: #000000;
+}
+
+/* 2) Sidebar background + default text (light/white on navy) */
+[data-testid="stSidebar"] {
+  background-color: #0f172a;
+}
+[data-testid="stSidebar"] * {
+  color: #e5e7eb !important;  /* force light text in sidebar */
+}
+
+/* 3) Sidebar selectbox text -> black */
+[data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] * {
+  color: #000000 !important;
+}
+
+/* 4) Sidebar button text -> black */
+[data-testid="stSidebar"] button * {
+  color: #000000 !important;
+}
+
+/* 5) Main-page dataframe text -> black */
+[data-testid="stAppViewContainer"] .stDataFrame * {
+  color: #000000 !important;
+}

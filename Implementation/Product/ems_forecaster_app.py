@@ -16,6 +16,14 @@ from statsmodels.tsa.holtwinters import ExponentialSmoothing
 import requests  # new
 from google import genai
 
+def load_css(file_name: str):
+    css_path = Path(__file__).parent / file_name
+    with open(css_path) as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+load_css("style.css")
+
+
 genai_client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 MODEL_NAME = "gemini-3-flash-preview"  # or any current model
 
@@ -161,29 +169,6 @@ history_df = load_weekly_exposures_from_fact()
 
 
 # ---------- 3. Sidebar controls ----------
-# 3a. Inject CSS first (runs on main page but targets sidebar)
-st.markdown("""
-<style>
-[data-testid="stSidebar"] {
-  background-color: #0f172a;
-}
-[data-testid="stSidebar"] * {
-  color: #e5e7eb;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown(
-    """
-    <style>
-    /* Text inside selectboxes, multiselects, etc. */
-    div[data-baseweb="select"] * {
-        color: #000000 !important;  /* black */
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 # 3b. All sidebar UI goes inside st.sidebar
 BASE_DIR = Path(__file__).parent
