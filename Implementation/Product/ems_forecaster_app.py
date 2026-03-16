@@ -34,9 +34,8 @@ st.set_page_config(
     
 )
 
-
 st.title("EMS Work‑Related Exposure Forecast")
-st.caption("Prototype app – weekly exposures forecast with SARIMA / Prophet")
+st.caption("Prototype app – weekly exposures forecast with several forecasting models")
 
 # ---------- 2. Fake data for now (replace with your real weekly series) ----------
 #def load_fake_weekly_exposures():
@@ -167,8 +166,8 @@ def load_weekly_exposures_from_fact():
 
 history_df = load_weekly_exposures_from_fact()
 
-
 # ---------- 3. Sidebar controls ----------
+
 
 # 3b. All sidebar UI goes inside st.sidebar
 BASE_DIR = Path(__file__).parent

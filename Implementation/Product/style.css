@@ -1,42 +1,49 @@
-/* 1) Main content text = black on white */
+/* 1) Main content text = black on white 
 [data-testid="stAppViewContainer"] * {
   color: #000000;
 }
 
-/* 2) Main-page dataframe text explicit black */
+/* 2) Main-page dataframe text explicit black 
 [data-testid="stAppViewContainer"] .stDataFrame * {
   color: #000000 !important;
 }
 
 /* 3) Sidebar background + default text (light/white on navy) */
 [data-testid="stSidebar"] {
-  background-color: #0f172a;
+   /* 0,14,32 is a dark navy; 0.1 = 10% opacity */
+  background-color: rgba(15, 23, 42, 0.1) !important;
 }
+/* Let sidebar text use the normal theme color (no forced white) */
 [data-testid="stSidebar"] * {
-  color: #e5e7eb !important;  /* labels, captions, etc. */
+  color: inherit !important;
 }
 
-/* 4) Sidebar selectbox text -> black (so it stands out on white box) */
+
+/*[data-testid="stSidebar"] * {
+  color: #e5e7eb !important;  /* labels, captions, etc. 
+}*/
+
+/* 4) Sidebar selectbox text -> black (so it stands out on white box) 
 [data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] * {
   color: #000000 !important;
 }
 
-/* 5) Sidebar button text -> WHITE (override any earlier black rule) */
+/* 5) Sidebar button text -> WHITE (override any earlier black rule) 
 [data-testid="stSidebar"] button * {
   color: #ffffff !important;
 }
 
-/* Force ONLY main-page dataframe text to black */
+/* Force ONLY main-page dataframe text to black 
 [data-testid="stAppViewContainer"] .stDataFrame div {
   color: #000000 !important;
 }
 
-/* Slider labels and ticks in main content: make text black */
+/* Slider labels and ticks in main content: make text black 
 [data-testid="stAppViewContainer"] .stSlider * {
   color: #000000 !important;
 }
 
-/* Slider labels and ticks in sidebar: light text on navy */
+/* Slider labels and ticks in sidebar: light text on navy 
 [data-testid="stSidebar"] .stSlider * {
   color: #e5e7eb !important;
 }
@@ -48,17 +55,18 @@ div.stSlider div[data-baseweb="slider"] > div[data-testid="stTickBar"] {
     #f97316 0%,      /* orange left 
     #f97316 50%,
     #e5e7eb 50%,     /* light gray remainder
+    
     #e5e7eb 100%
   ) !important;
 }*/
 
-/* Slider thumb (the circle) orange */
+/* Slider thumb (the circle) orange 
 div.stSlider div[data-baseweb="slider"] > div > div > div[role="slider"] {
   background-color: #f97316 !important;
   box-shadow: 0 0 0 0.2rem rgba(249, 115, 22, 0.3) !important;
 }
 
-/* Make main-page data_editor (table) text black */
+/* Make main-page data_editor (table) text black 
 [data-testid="stAppViewContainer"] [data-testid="stDataEditorGrid"] * {
   color: #000000 !important;
 }
