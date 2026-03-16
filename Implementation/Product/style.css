@@ -8,16 +8,17 @@
   color: #000000 !important;
 }
 
-/* 3) Sidebar background + default text (light/white on navy) */
+------
+/* 3) Sidebar background + default text (light/white on navy) 
 [data-testid="stSidebar"] {
-   /* 0,14,32 is a dark navy; 0.1 = 10% opacity */
+   /* 0,14,32 is a dark navy; 0.1 = 10% opacity 
   background-color: rgba(15, 23, 42, 0.1) !important;
 }
-/* Let sidebar text use the normal theme color (no forced white) */
+/* Let sidebar text use the normal theme color (no forced white) 
 [data-testid="stSidebar"] * {
   color: inherit !important;
 }
-
+---------
 
 /*[data-testid="stSidebar"] * {
   color: #e5e7eb !important;  /* labels, captions, etc. 
@@ -70,3 +71,49 @@ div.stSlider div[data-baseweb="slider"] > div > div > div[role="slider"] {
 [data-testid="stAppViewContainer"] [data-testid="stDataEditorGrid"] * {
   color: #000000 !important;
 }
+
+
+/* 1) Main content text = black on white 
+[data-testid="stAppViewContainer"] * {
+  color: #000000;
+}
+
+/* 2) Main-page dataframe text explicit black 
+[data-testid="stAppViewContainer"] .stDataFrame div[role="grid"] * {
+  color: #000000 !important;
+}
+
+/* 3) Sidebar background: navy with ~10% opacity 
+[data-testid="stSidebar"] {
+  background-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+/* 4) Sidebar text: use normal theme color (inherit) 
+[data-testid="stSidebar"] * {
+  color: inherit !important;
+}
+
+/* 5) Main-page data_editor (if you use it) text black 
+[data-testid="stAppViewContainer"] [data-testid="stDataEditorGrid"] * {
+  color: #000000 !important;
+}
+/* Sidebar selectbox: force text to dark so it shows on navy dropdown */
+[data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] * {
+  color: #111827 !important;  /* dark gray/near black */
+}
+
+/* Sidebar slider: make numbers and current value light */
+[data-testid="stSidebar"] [data-testid="stSlider"] * {
+  color: #e5e7eb !important;  /* light gray / near white */
+}
+
+/* Sidebar slider thumb (circle) light so it's visible on navy */
+[data-testid="stSidebar"] [data-testid="stSlider"] div[data-baseweb="slider"] div[role="slider"] {
+  background-color: #e77634 !important;
+  box-shadow: 0 0 0 0.15rem rgba(229, 231, 235, 0.5) !important;
+}
+
+/* Sidebar slider track: keep using primaryColor, just ensure contrast 
+[data-testid="stSidebar"] [data-testid="stSlider"] div[data-baseweb="slider"] > div:first-child {
+  background-color: #f97316 !important;  /* orange filled part 
+}*/

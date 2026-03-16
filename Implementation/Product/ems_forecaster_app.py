@@ -197,20 +197,20 @@ with st.sidebar:
 
     horizon_weeks = st.slider(
         "Forecast horizon (weeks)",
-        min_value=4,
+        min_value=1,
         max_value=24,
-        value=12,
+        value=1,
         step=1,
     )
 
     st.markdown("---")
     st.markdown("**Options**")
 
-    show_conf = st.checkbox("Show confidence band", value=True)
+    show_conf = st.checkbox("Show confidence band", value=False)
     use_events = st.checkbox("Include major events (concerts, rallies, holidays)", value=False)
     use_weather = st.checkbox("Include weather effects (rain/snow)", value=False)
     show_original_vs_updated = st.checkbox("Show original vs updated forecast", value=False)
-    use_ai_recommendation = st.checkbox("Generate AI manager recommendation", value=True)
+    use_ai_recommendation = st.checkbox("Generate AI manager recommendation", value=False)
 
     run_button = st.button("Run forecast")
 
