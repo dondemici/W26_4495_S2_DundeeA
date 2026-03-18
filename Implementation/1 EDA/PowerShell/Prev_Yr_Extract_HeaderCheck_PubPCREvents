@@ -1,0 +1,17 @@
+$path = 'D:\Downloads\ASCII 2023 CP25\pub_pcrevents_cp25.txt'
+
+# Read just the first line (header)
+$headerLine = Get-Content -Path $path -TotalCount 1
+
+# Show the raw header
+$headerLine
+
+# If it is delimited, split into columns (change `"`t`"`, `,`, `|` as needed)
+$delimiter = "`t"   # tab
+$columns = $headerLine -split $delimiter
+
+# Show numbered list of column names
+$columns | ForEach-Object -Begin { $i = 0 } -Process {
+    "{0,3}: {1}" -f $i, $_
+    $i++
+}
