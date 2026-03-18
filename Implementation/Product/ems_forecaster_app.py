@@ -164,7 +164,77 @@ def load_weekly_exposures_from_fact():
 
     return weekly
 
+
+TM_API_KEY = st.secrets["TICKETMASTER_API_KEY"]
+
+@st.cache_data(ttl=6*3600)
+def fetch_ticketmaster_events(start_dt, end_dt):
+    """
+    Fetch events from Ticketmaster Discovery API for Greater Vancouver
+    between start_dt and end_dt (Python datetimes).
+    Returns a DataFrame with week_start and n_events.
+    """
+    url = "https://app.ticketmaster.com/discovery/v2/events.json"
+
+    # Ticketmaster expects ISO 8601 with Z
+    start_iso = start_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_iso = end_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    params = {
+        "apikey": TM_API_KEY,
+        "countryCode": "CA",
+        "city": "Vancouver",
+        "startDateTime": start_iso,
+        "endDateTime": end_iso,
+        "size": 200,
+    }
+
+    import math
+    all_events = []
+
+    try:
+        r = requests.get(url, params=params, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+
+        if "_embedded" not in data or "events" not in data["_embedded"]:
+            return pd.DataFrame(columns=["week_start", "n_events"])
+
+        events = data["_embedded"]["events"]
+        for ev in events:
+            # pick start date
+            dates = ev.get("dates", {})
+            start = dates.get("start", {})
+            date_str = start.get("localDate") or start.get("dateTime")
+            if not date_str:
+                continue
+            event_date = pd.to_datetime(date_str).date()
+            all_events.append(event_date)
+
+        if not all_events:
+            return pd.DataFrame(columns=["week_start", "n_events"])
+
+        events_df = pd.DataFrame({"date": pd.to_datetime(all_events)})
+        # convert to Monday week start
+        events_df["week_start"] = events_df["date"] - pd.to_timedelta(
+            events_df["date"].dt.weekday, unit="D"
+        )
+
+        weekly = (
+            events_df.groupby("week_start")
+            .size()
+            .reset_index(name="n_events")
+        )
+        return weekly
+
+    except Exception as e:
+        st.warning(f"Ticketmaster API error: {e}")
+        return pd.DataFrame(columns=["week_start", "n_events"])
+
+
 history_df = load_weekly_exposures_from_fact()
+
+
 
 # ---------- 3. Sidebar controls ----------
 
@@ -267,6 +337,30 @@ else:
     history_with_weather = history_df.copy()
 
 
+
+# Starting from your existing logic:
+# history_df: base weekly exposures
+# history_with_weather: either history_df or merged with weather
+base_for_events = history_with_weather.copy()
+
+if use_events:
+    events_weekly = fetch_ticketmaster_events(
+        base_for_events["week_start"].min(),
+        base_for_events["week_start"].max() + pd.Timedelta(weeks=horizon_weeks),
+    )
+
+    if not events_weekly.empty:
+        history_with_events = base_for_events.merge(
+            events_weekly, on="week_start", how="left"
+        )
+        history_with_events["n_events"].fillna(0, inplace=True)
+    else:
+        st.info("No Ticketmaster events found; running without event effects.")
+        history_with_events = base_for_events.copy()
+else:
+    history_with_events = base_for_events.copy()
+
+
 # ---------- 4. Simple placeholder forecast function ----------
 # Define extra forecast functions (Naive, Moving Avg, SES, SARIMA)
 def naive_forecast(df, horizon):
@@ -337,16 +431,18 @@ def ses_forecast(df, horizon):
         "yhat_upper": upper,
     })
 
-def sarima_forecast(df, horizon, use_weather=False):
+def sarima_forecast(df, horizon, use_weather=False, use_events=False):
     df = df.sort_values("week_start").copy()
     y = df["exposures"].astype(float)
     y.index = pd.DatetimeIndex(df["week_start"])
 
-    exog_train = None
     exog_cols = []
     if use_weather:
-        exog_cols = ["precip", "snow", "tempmax", "tempmin"]
-        exog_train = df[exog_cols].ffill()
+        exog_cols += ["precip", "snow", "tempmax", "tempmin"]
+    if use_events and "n_events" in df.columns:
+        exog_cols += ["n_events"]
+
+    exog_train = df[exog_cols].ffill() if exog_cols else None
 
     model = SARIMAX(
         y,
@@ -366,11 +462,12 @@ def sarima_forecast(df, horizon, use_weather=False):
     )
 
     exog_future = None
-    if use_weather and exog_train is not None:
+    if exog_cols:
+        # For now, assume future weeks have same exog as last observed
         last_row = exog_train.iloc[-1]
         exog_future = pd.DataFrame(
             [last_row.values] * horizon,
-            columns=exog_train.columns,
+            columns=exog_cols,
             index=future_dates,
         )
 
@@ -384,7 +481,6 @@ def sarima_forecast(df, horizon, use_weather=False):
         "yhat_lower": conf_int.iloc[:, 0].values,
         "yhat_upper": conf_int.iloc[:, 1].values,
     })
-
 
 def simple_naive_forecast(df, horizon):
     """
@@ -607,12 +703,18 @@ else:
         st.warning("Not enough history for Holt-Winters; using Holt instead.")
         forecast_df = holt_forecast(history_df, horizon_weeks)
     elif model_choice == "SARIMA":
-        base_df = history_with_weather if use_weather else history_df
-        forecast_df = sarima_forecast(base_df, horizon_weeks, use_weather=use_weather)
+        # choose which df to pass
+        base_df = history_with_events  # already includes weather + events if toggled
+        forecast_df = sarima_forecast(
+            base_df,
+            horizon_weeks,
+            use_weather=use_weather,
+            use_events=use_events,
+        )
     elif model_choice == "ML (Experimental)":
-        forecast_df = ml_forecast(history_df, horizon_weeks)
+            forecast_df = ml_forecast(history_df, horizon_weeks)
     else: # "Prophet (default)" placeholder for now
-        forecast_df = naive_forecast(history_df, horizon_weeks)
+            forecast_df = naive_forecast(history_df, horizon_weeks)
 
 
     # Generate AI recommendation
