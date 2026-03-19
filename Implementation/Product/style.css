@@ -97,10 +97,10 @@ div.stSlider div[data-baseweb="slider"] > div > div > div[role="slider"] {
 [data-testid="stAppViewContainer"] [data-testid="stDataEditorGrid"] * {
   color: #000000 !important;
 }
-/* Sidebar selectbox: force text to dark so it shows on navy dropdown */
+/* Sidebar selectbox: force text to dark so it shows on navy dropdown
 [data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] * {
-  color: #111827 !important;  /* dark gray/near black */
-}
+  color: #111827 !important;  /* dark gray/near black
+}*/
 
 /* Sidebar slider: make numbers and current value light */
 [data-testid="stSidebar"] [data-testid="stSlider"] * {
@@ -110,7 +110,17 @@ div.stSlider div[data-baseweb="slider"] > div > div > div[role="slider"] {
 /* Sidebar slider thumb (circle) light so it's visible on navy */
 [data-testid="stSidebar"] [data-testid="stSlider"] div[data-baseweb="slider"] div[role="slider"] {
   background-color: #e77634 !important;
-  box-shadow: 0 0 0 0.15rem rgba(229, 231, 235, 0.5) !important;
+  box-shadow: 0 0 0 0.15rem rgba(111, 116, 126, 0.5) !important;
+}
+
+/* Only the visible select box text, not the dropdown options */
+[data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] > div:first-child * {
+  color: #111827 !important;  /* dark for closed box */
+}
+
+/* Dropdown options: force them to be light so they show on navy */
+ul[data-testid="stSelectboxVirtualDropdown"] li[role="option"] * {
+  color: #5e646e !important;  /* light text */
 }
 
 /* Sidebar slider track: keep using primaryColor, just ensure contrast 
