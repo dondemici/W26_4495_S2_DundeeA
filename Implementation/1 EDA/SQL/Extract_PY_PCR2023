@@ -1,10 +1,12 @@
+DROP TABLE IF EXISTS dbo.Stage_PCREvents_2023_Min;
+
 CREATE TABLE dbo.Stage_PCREvents_2023_Min (
     PcrKey    bigint,
-    eTimes_03 varchar(50)
+    eTimes_03 varchar(100)   -- plenty of room for the datetime text
 );
 
 
-BULK INSERT dbo.Stage_PCREvents_2023_Min
+BULK INSERT dbo.PCR_Staging
 FROM 'D:\Downloads\ASCII_64 2024\Pub_PCRevents.txt'
 WITH (
     FIRSTROW        = 2,
@@ -12,3 +14,4 @@ WITH (
     ROWTERMINATOR   = '\n',
     TABLOCK
 );
+GO
