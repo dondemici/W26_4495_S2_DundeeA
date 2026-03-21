@@ -1,0 +1,14 @@
+CREATE TABLE dbo.Stage_PCREvents_2023_Min (
+    PcrKey    bigint,
+    eTimes_03 varchar(50)
+);
+
+
+BULK INSERT dbo.Stage_PCREvents_2023_Min
+FROM 'D:\Downloads\ASCII_64 2024\Pub_PCRevents.txt'
+WITH (
+    FIRSTROW        = 2,
+    FIELDTERMINATOR = '~|~',
+    ROWTERMINATOR   = '\n',
+    TABLOCK
+);
