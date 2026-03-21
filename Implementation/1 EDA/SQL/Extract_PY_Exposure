@@ -1,0 +1,36 @@
+USE EMSData;
+GO
+
+-- 1) Drop the old table if it exists
+IF OBJECT_ID('dbo.PCR_Exposure_2023_YesNo', 'U') IS NOT NULL
+    DROP TABLE dbo.PCR_Exposure_2023_YesNo;
+GO
+
+
+USE EMSData;
+GO
+
+SELECT
+    f.PcrKey,
+    CAST(TRY_CONVERT(DATETIME2, p.eTimes_03, 126) AS DATE) AS CallDate,
+    CASE 
+        WHEN f.eOther_05 = '9923003' THEN 1      -- Yes
+        WHEN f.eOther_05 = '9923001' THEN 0      -- No
+    END AS WorkExposureFlag,
+    p.eScene_06        AS SceneLocationType,
+    p.eResponse_05     AS ServiceType,
+    p.eResponse_07     AS UnitRole,
+    p.eResponse_15     AS UnitServiceLevel,
+    p.eSituation_02    AS PossibleInjury,
+    c.USCensusRegion,
+    c.USCensusDivision,
+    c.NasemsoRegion,
+    c.Urbanicity,
+    TRY_CONVERT(FLOAT, c.EMSTotalCallTimeMin)   AS EMSTotalCallTimeMin,
+    TRY_CONVERT(FLOAT, c.EMSSceneTimeMin)       AS EMSSceneTimeMin,
+    TRY_CONVERT(FLOAT, c.EMSTransportTimeMin)   AS EMSTransportTimeMin
+INTO dbo.PCR_Exposure_2023_YesNo
+FROM dbo.Stage_FACTPCRWORKRELATEDEXPOSURE_2023 AS f
+LEFT JOIN dbo.Stage_PCREvents_2023        AS p ON f.PcrKey = p.PcrKey
+LEFT JOIN dbo.Stage_ComputedElements_2023 AS c ON f.PcrKey = c.PcrKey
+WHERE f.eOther_05 IN ('9923001','9923003');  -- only Yes/No
