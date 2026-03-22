@@ -56,3 +56,24 @@ FROM dbo.Stage_FACTPCRWORKRELATEDEXPOSURE_2023 AS f
 LEFT JOIN dbo.Stage_PCREvents_2023_Min       AS p ON f.PcrKey = p.PcrKey
 WHERE f.eOther_05 IN ('9923001','9923003');
 GO
+
+
+SELECT
+    COUNT(*) AS TotalRows,
+    SUM(CASE WHEN CallDate IS NOT NULL THEN 1 ELSE 0 END) AS NonNullCallDate
+FROM dbo.PCR_Exposure_2023_YesNo;
+
+SELECT TOP 20 PcrKey, CallDate, WorkExposureFlag
+FROM dbo.PCR_Exposure_2023_YesNo
+ORDER BY CallDate;
+
+Daily Tiome Serries
+SELECT
+    CallDate,
+    SUM(CASE WHEN WorkExposureFlag = 1 THEN 1 ELSE 0 END) AS YesCount,
+    SUM(CASE WHEN WorkExposureFlag = 0 THEN 1 ELSE 0 END) AS NoCount,
+    COUNT(*) AS TotalRecords
+FROM dbo.PCR_Exposure_2023_YesNo
+WHERE CallDate IS NOT NULL
+GROUP BY CallDate
+ORDER BY CallDate;
