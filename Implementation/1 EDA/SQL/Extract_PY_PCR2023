@@ -77,3 +77,9 @@ FROM dbo.PCR_Exposure_2023_YesNo
 WHERE CallDate IS NOT NULL
 GROUP BY CallDate
 ORDER BY CallDate;
+
+
+
+
+SELECT TOP 5 *
+FROM dbo.PCR_Staging;
