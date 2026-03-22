@@ -15,3 +15,44 @@ WITH (
     TABLOCK
 );
 GO
+
+
+Recreate and populate the minimal time table
+IF OBJECT_ID('dbo.Stage_PCREvents_2023_Min', 'U') IS NOT NULL
+    DROP TABLE dbo.Stage_PCREvents_2023_Min;
+GO
+
+CREATE TABLE dbo.Stage_PCREvents_2023_Min (
+    PcrKey    varchar(100),
+    eTimes_03 varchar(200)
+);
+GO
+
+INSERT INTO dbo.Stage_PCREvents_2023_Min (PcrKey, eTimes_03)
+SELECT
+    PcrKey,
+    eTimes_03
+FROM dbo.PCR_Staging;
+GO
+
+SELECT TOP 20 *
+FROM dbo.Stage_PCREvents_2023_Min;
+
+
+ Build the exposure Yes/No table with CallDate
+IF OBJECT_ID('dbo.PCR_Exposure_2023_YesNo', 'U') IS NOT NULL
+    DROP TABLE dbo.PCR_Exposure_2023_YesNo;
+GO
+
+SELECT
+    CAST(f.PcrKey AS bigint) AS PcrKey,
+    CAST(TRY_CONVERT(datetime2, p.eTimes_03) AS date) AS CallDate,
+    CASE 
+        WHEN f.eOther_05 = '9923003' THEN 1      -- Yes
+        WHEN f.eOther_05 = '9923001' THEN 0      -- No
+    END AS WorkExposureFlag
+INTO dbo.PCR_Exposure_2023_YesNo
+FROM dbo.Stage_FACTPCRWORKRELATEDEXPOSURE_2023 AS f
+LEFT JOIN dbo.Stage_PCREvents_2023_Min       AS p ON f.PcrKey = p.PcrKey
+WHERE f.eOther_05 IN ('9923001','9923003');
+GO
