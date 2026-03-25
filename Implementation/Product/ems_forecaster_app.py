@@ -34,7 +34,7 @@ st.set_page_config(
     
 )
 
-st.title("EMS Work‑Related Exposure Forecast")
+st.title("EMS Work‑Related Injury Forecast")
 st.caption("Prototype app – weekly exposures forecast with several forecasting models")
 
 # ---------- 2. Fake data for now (replace with your real weekly series) ----------
