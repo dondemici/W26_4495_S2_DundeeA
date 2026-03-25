@@ -1,3 +1,13 @@
 Submitted request for 2020-2023 data
 https://nemsis.atlassian.net/servicedesk/customer/portal/1/create/37
 Ref NEMSD-6322
+
+
+03-22
+Sent followup email since the expected eTimes03 data for 2023 does not contain any timestamp.
+
+Hi Casey:
+
+Sorry to bug you again at this point of time but looking further at the eTimes data of the PCR event file given, however the column does not contain any date data or timestamps at all so I'm unable to use the eTimes data for 2023. Hoping there's a way for me to extract the eTimes03 particularly for my work exposure data analysis. Appreciate your help. Thank you.
+
+PcrKey eTimes_01 eTimes_03 eTimes_05 eTimes_06 eTimes_07 eTimes_09 eTimes_11 eTimes_12 eTimes_13 ------ --------- --------- --------- --------- --------- --------- --------- --------- --------- 7701001 7701001 7701001 7701001 7701001 7701001 7701001 7701001 7701001 7701001 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 7701003 4217001 4217001 4217001 4217001 4217001 4217001 4217001 4217001 4217001 4217001
