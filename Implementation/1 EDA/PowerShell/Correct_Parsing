@@ -1,0 +1,29 @@
+$path  = 'D:\Downloads\ASCII 2023 CP25\pub_pcrevents_cp25.txt'
+
+# Read header + first 20 data rows
+$lines = Get-Content $path -TotalCount 21
+
+# 1) Clean header: remove single quotes and turn ~|~ into commas
+$header = $lines[0] -replace "'", ''
+$header = $header -replace '\~\|\~', ','
+
+# 2) Clean data lines: replace ~|~ with commas
+$data = $lines[1..($lines.Count-1)] | ForEach-Object {
+    $_ -replace '\~\|\~', ','
+}
+
+# 3) Build a small CSV text (header + 20 data rows)
+$csvText = $header + [Environment]::NewLine + ($data -join [Environment]::NewLine)
+
+# 4) Parse as CSV
+$rows = $csvText | ConvertFrom-Csv
+
+# 5) Show first 20 rows: first 2 columns
+$rows |
+    Select-Object -First 20 PcrKey, eDispatch_01 |
+    Format-Table -AutoSize
+
+# 6) Show first 20 rows: timestamp column
+$rows |
+    Select-Object -First 20 PcrKey, eTimes_03 |
+    Format-Table -AutoSize
