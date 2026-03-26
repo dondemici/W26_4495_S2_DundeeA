@@ -1,0 +1,84 @@
+-- 1) Drop the staging table if it already exists
+IF OBJECT_ID('dbo.PCR_Staging', 'U') IS NOT NULL
+    DROP TABLE dbo.PCR_Staging;
+GO
+
+-- 2) Recreate it
+CREATE TABLE dbo.PCR_Staging (
+    PcrKey           BIGINT         NULL,
+    eDispatch_01     VARCHAR(50)    NULL,
+    eDispatch_02     VARCHAR(50)    NULL,
+    eArrest_14       VARCHAR(50)    NULL,
+    eArrest_01       VARCHAR(50)    NULL,
+    eArrest_02       VARCHAR(50)    NULL,
+    eArrest_05       VARCHAR(50)    NULL,
+    eArrest_07       VARCHAR(50)    NULL,
+    eArrest_11       VARCHAR(50)    NULL,
+    eArrest_16       VARCHAR(50)    NULL,
+    eArrest_18       VARCHAR(50)    NULL,
+    eDisposition_12  VARCHAR(50)    NULL,
+    eDisposition_19  VARCHAR(50)    NULL,
+    eDisposition_16  VARCHAR(50)    NULL,
+    eDisposition_21  VARCHAR(50)    NULL,
+    eDisposition_22  VARCHAR(50)    NULL,
+    eDisposition_23  VARCHAR(50)    NULL,
+    eOutcome_01      VARCHAR(50)    NULL,
+    eOutcome_02      VARCHAR(50)    NULL,
+    ePatient_15      VARCHAR(50)    NULL,
+    ePatient_16      VARCHAR(50)    NULL,
+    ePayment_01      VARCHAR(50)    NULL,
+    ePayment_50      VARCHAR(50)    NULL,
+    eResponse_05     VARCHAR(50)    NULL,
+    eResponse_07     VARCHAR(50)    NULL,
+    eResponse_15     VARCHAR(50)    NULL,
+    eResponse_23     VARCHAR(50)    NULL,
+    eScene_01        VARCHAR(50)    NULL,
+    eScene_06        VARCHAR(50)    NULL,
+    eScene_07        VARCHAR(50)    NULL,
+    eScene_08        VARCHAR(50)    NULL,
+    eScene_09        VARCHAR(50)    NULL,
+    eSituation_02    VARCHAR(50)    NULL,
+    eSituation_07    VARCHAR(50)    NULL,
+    eSituation_08    VARCHAR(50)    NULL,
+    eSituation_13    VARCHAR(50)    NULL,
+    eSituation_01    VARCHAR(50)    NULL,
+    eTimes_01        VARCHAR(25)    NULL,
+    eTimes_03        VARCHAR(25)    NULL,
+    eTimes_05        VARCHAR(25)    NULL,
+    eTimes_06        VARCHAR(25)    NULL,
+    eTimes_07        VARCHAR(25)    NULL,
+    eTimes_09        VARCHAR(25)    NULL,
+    eTimes_11        VARCHAR(25)    NULL,
+    eTimes_12        VARCHAR(25)    NULL,
+    eTimes_13        VARCHAR(25)    NULL,
+    eDisposition_17  VARCHAR(50)    NULL
+);
+GO
+
+
+
+
+
+-- 3) Bulk Insert
+BULK INSERT dbo.PCR_Staging
+FROM 'D:\Downloads\ASCII 2023 CP25\pub_pcrevents_cp25_converted.csv'
+WITH (
+    DATAFILETYPE   = 'char',
+    FORMAT         = 'CSV',      -- SQL Server 2017+ [web:147][web:148]
+    FIRSTROW       = 2,          -- skip header row
+    FIELDTERMINATOR = ',',       -- from the PowerShell conversion
+    ROWTERMINATOR   = '\n',      -- use '\r\n' if needed
+    BATCHSIZE       = 50000,     -- good starting point for 45M+ rows [web:113][web:115]
+    TABLOCK,
+    KEEPNULLS
+);
+
+
+-- 4) Quick Check
+SELECT TOP (20)
+    PcrKey,
+    eDispatch_01,
+    eTimes_01,
+    eTimes_03,
+    eTimes_05
+FROM dbo.PCR_Staging;
