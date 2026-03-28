@@ -1,0 +1,60 @@
+function Convert-NemsisFileToCsv {
+    param(
+        [Parameter(Mandatory)]
+        [string]$InputPath,
+        [Parameter(Mandatory)]
+        [string]$OutputPath
+    )
+
+    $reader = [System.IO.File]::OpenText($InputPath)
+    $writer = New-Object System.IO.StreamWriter($OutputPath, $false, [System.Text.Encoding]::UTF8)
+
+    # Progress tracking
+    $totalBytes     = (Get-Item $InputPath).Length
+    $processedBytes = 0L
+    $lineCount      = 0L
+
+    try {
+        # Header
+        $header = $reader.ReadLine()
+        $processedBytes += $reader.CurrentEncoding.GetByteCount($header + [Environment]::NewLine)
+        $lineCount++
+
+        $header = $header -replace "'", ''
+        $header = $header -replace '\~\|\~', ','
+        $writer.WriteLine($header)
+
+        # Data lines
+        while (-not $reader.EndOfStream) {
+            $line = $reader.ReadLine()
+            if ([string]::IsNullOrWhiteSpace($line)) { continue }
+
+            $processedBytes += $reader.CurrentEncoding.GetByteCount($line + [Environment]::NewLine)
+            $lineCount++
+
+            if ($lineCount % 100000 -eq 0) {
+                $percent = [math]::Min(100, [math]::Round(100.0 * $processedBytes / $totalBytes, 2))
+                Write-Progress -Activity "Converting $(Split-Path $InputPath -Leaf)" `
+                               -Status "Lines processed: $lineCount" `
+                               -PercentComplete $percent
+            }
+
+            $line = $line -replace '\~\|\~', ','
+            $writer.WriteLine($line)
+        }
+
+        Write-Progress -Activity "Converting $(Split-Path $InputPath -Leaf)" -Completed
+    }
+    finally {
+        $reader.Close()
+        $writer.Close()
+    }
+}
+
+Convert-NemsisFileToCsv `
+    -InputPath  'D:\Downloads\ASCII 2023 CP25\FACTPCRWORKRELATEDEXPOSURE.txt' `
+    -OutputPath 'D:\Downloads\ASCII 2023 CP25\FACTPCRWORKRELATEDEXPOSURE.csv'
+
+Convert-NemsisFileToCsv `
+    -InputPath  'D:\Downloads\ASCII 2023 CP25\ComputedElements.txt' `
+    -OutputPath 'D:\Downloads\ASCII 2023 CP25\ComputedElements.csv'
