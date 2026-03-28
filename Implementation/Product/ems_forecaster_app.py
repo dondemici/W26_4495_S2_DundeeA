@@ -264,14 +264,14 @@ with st.sidebar:
         ],
         index=0,
     )
-
-    horizon_weeks = st.slider(
-        "Forecast horizon (weeks)",
-        min_value=1,
-        max_value=24,
-        value=1,
-        step=1,
-    )
+#
+# horizon_weeks = st.slider(
+#    "Forecast horizon (weeks)",
+#    min_value=1,
+#    max_value=24,
+#    value=1,
+#    step=1,
+#)
 
     st.markdown("---")
     st.markdown("**Options**")
@@ -283,6 +283,8 @@ with st.sidebar:
     use_ai_recommendation = st.checkbox("Generate AI manager recommendation", value=False)
 
     run_button = st.button("Run forecast")
+    if run_button:
+        st.session_state["run_forecast"] = True
 
 # Weather-enriched history
 # Define allowed weather window (from Open-Meteo error message)
@@ -679,18 +681,28 @@ Using this information, write a short, practical recommendation
 
         return response.text
 
+if "run_forecast" not in st.session_state:
+    st.session_state["run_forecast"] = False
+
+if "horizon_weeks" not in st.session_state:
+    st.session_state["horizon_weeks"] = 1
+
 
 # ---------- 5. Main logic ----------
-if not run_button:
+if not st.session_state["run_forecast"]:
     st.info("Set options in the left sidebar, then click **Run forecast**.")
 else:
+    # Main-page slider above the graph/results
+    horizon_weeks = st.slider(
+        "Forecast horizon (weeks)",
+        min_value=1,
+        max_value=24,
+        value=st.session_state["horizon_weeks"],
+        step=1,
+        key="horizon_weeks",
+    )
 
-         
-    #Switch on model_choice in the main block
-
-    # In the future you will branch here for SARIMA vs Prophet
-    #forecast_df = simple_naive_forecast(history_df, horizon_weeks)
-
+    # Switch on model_choice in the main block
     if model_choice == "Naive":
         forecast_df = naive_forecast(history_df, horizon_weeks)
     elif model_choice == "Moving Average":
@@ -703,8 +715,7 @@ else:
         st.warning("Not enough history for Holt-Winters; using Holt instead.")
         forecast_df = holt_forecast(history_df, horizon_weeks)
     elif model_choice == "SARIMA":
-        # choose which df to pass
-        base_df = history_with_events  # already includes weather + events if toggled
+        base_df = history_with_events
         forecast_df = sarima_forecast(
             base_df,
             horizon_weeks,
@@ -712,29 +723,23 @@ else:
             use_events=use_events,
         )
     elif model_choice == "ML (Experimental)":
-            forecast_df = ml_forecast(history_df, horizon_weeks)
-    else: # "Prophet (default)" placeholder for now
-            forecast_df = naive_forecast(history_df, horizon_weeks)
+        forecast_df = ml_forecast(history_df, horizon_weeks)
+    else:  # Prophet placeholder
+        forecast_df = naive_forecast(history_df, horizon_weeks)
+    
+    st.subheader("Historical weekly exposures + forecast")
+    chart_data = ...
+    st.line_chart(chart_data)
 
-
-    # Generate AI recommendation
-    with st.spinner("Generating manager recommendation..."):
-        try:
-            ai_reco = generate_recommendation(
-                history_df, forecast_df, model_choice, horizon_weeks
-            )
-        except Exception as e:
-            ai_reco = f"(Error generating recommendation: {e})"
-
-
-    # For “original vs updated” demo, pretend updated forecast
-    # is based on slightly higher recent trend
     updated_forecast_df = None
     if show_original_vs_updated:
         updated_forecast_df = forecast_df.copy()
         updated_forecast_df["yhat"] = updated_forecast_df["yhat"] + 2
         updated_forecast_df["yhat_lower"] = updated_forecast_df["yhat_lower"] + 2
         updated_forecast_df["yhat_upper"] = updated_forecast_df["yhat_upper"] + 2
+
+
+
 
     # ---------- 5a. Summary metrics ----------
     col1, col2, col3 = st.columns(3)
@@ -754,51 +759,48 @@ else:
             f"{horizon_weeks} weeks"
         )
 
-
     # ---------- 5b. Plot historical + forecast ----------
     st.subheader("Historical weekly exposures + forecast")
 
-    plot_df_hist = history_df.rename(columns={"exposures": "value"})
+    plot_df_hist = history_df[["week_start", "exposures"]].rename(
+        columns={"exposures": "value"}
+    )
     plot_df_hist["type"] = "Historical"
 
     plot_df_fcst = forecast_df[["week_start", "yhat"]].rename(
-        columns={"week_start": "week_start", "yhat": "value"}
+        columns={"yhat": "value"}
     )
     plot_df_fcst["type"] = "Forecast (baseline)"
 
     plot_df = pd.concat([plot_df_hist, plot_df_fcst], ignore_index=True)
 
-    # Line chart
-    chart_data = plot_df.pivot(index="week_start", columns="type", values="value")
-    st.line_chart(chart_data)
-
-    # Show prediction interval table (for clarity in demo)
+    if plot_df.empty:
+        st.warning("No chart data available.")
+    else:
+        chart_data = plot_df.pivot(
+            index="week_start",
+            columns="type",
+            values="value"
+        )
+        st.line_chart(chart_data)
 
     st.markdown("**Forecast table (baseline)**")
-    #st.dataframe(
-    #    forecast_df[["week_start", "yhat", "yhat_lower", "yhat_upper"]]
-    #    .rename(columns={
-    #        "week_start": "Week start",
-    #        "yhat": "Forecast",
-    #        "yhat_lower": "Lower",
-    #        "yhat_upper": "Upper"
-    #    })
-    #)
     table_df = (
-    forecast_df[["week_start", "yhat", "yhat_lower", "yhat_upper"]]
-    .rename(columns={
-        "week_start": "Week start",
-        "yhat": "Forecast",
-        "yhat_lower": "Lower",
-        "yhat_upper": "Upper"
-    })
-)
+        forecast_df[["week_start", "yhat", "yhat_lower", "yhat_upper"]]
+        .rename(columns={
+            "week_start": "Week start",
+            "yhat": "Forecast",
+            "yhat_lower": "Lower",
+            "yhat_upper": "Upper"
+        })
+    )
     st.data_editor(
         table_df,
         hide_index=True,
-        disabled=True,  # make it read-only like a table    
+        disabled=True,
     )
-        # ---------- 5c. Original vs updated overlay ----------
+
+    # ---------- 5c. Original vs updated overlay ----------
     if show_original_vs_updated and updated_forecast_df is not None:
         st.subheader("Original vs updated forecast (illustration)")
 
@@ -810,10 +812,9 @@ else:
 
         st.line_chart(comp)
 
-        # ---------- 5d. Narrative explanation ----------
+    # ---------- 5d. Narrative explanation ----------
     st.subheader("Interpretation (for managers)")
 
-    # Existing numeric summary
     next4 = forecast_df.head(4)
     avg_next4 = next4["yhat"].mean()
     avg_lower = next4["yhat_lower"].mean()
@@ -821,7 +822,7 @@ else:
 
     text = (
         f"Over the next 4 weeks, the model expects about **{avg_next4:.1f}** "
-        f"work‑related exposures per week "
+        f"work-related exposures per week "
         f"(roughly {avg_lower:.0f} to {avg_upper:.0f}). "
     )
 
@@ -834,19 +835,19 @@ else:
         )
         if pd.notna(corr_rain):
             text += (
-                f" Historically, weeks with more rain have a correlation of "
+                f"Historically, weeks with more rain have a correlation of "
                 f"{corr_rain:.2f} with exposure counts, so wet weeks may need "
                 f"a bit more staffing and PPE buffer. "
             )
         else:
             text += (
-                " Historically, there is not enough data to estimate how rain "
+                "Historically, there is not enough data to estimate how rain "
                 "relates to exposure counts yet. "
             )
 
     st.write(text)
 
-    st.markdown("**AI‑generated operational recommendation**")
+    st.markdown("**AI-generated operational recommendation**")
 
     if use_ai_recommendation:
         with st.spinner("Generating manager recommendation..."):
@@ -857,6 +858,6 @@ else:
             except Exception as e:
                 ai_reco = f"(Error generating recommendation: {e})"
     else:
-        ai_reco = "(AI recommendation skipped – uncheck the box to enable it.)"
+        ai_reco = "(AI recommendation skipped.)"
 
     st.write(ai_reco)
