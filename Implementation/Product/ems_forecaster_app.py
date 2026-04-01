@@ -728,7 +728,12 @@ else:
         forecast_df = naive_forecast(history_df, horizon_weeks)
     
     st.subheader("Historical weekly exposures + forecast")
-    chart_data = ...
+
+    chart_data = pd.concat([
+        history_df[["week_start", "exposures"]].rename(columns={"exposures": "Historical"}).set_index("week_start"),
+        forecast_df[["week_start", "yhat"]].rename(columns={"yhat": "Forecast (baseline)"}).set_index("week_start"),
+    ], axis=1)
+
     st.line_chart(chart_data)
 
     updated_forecast_df = None
