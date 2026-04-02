@@ -774,6 +774,8 @@ def backtest_and_score(df, model_name, horizon=8):
     mse = mean_squared_error(y_true, y_pred)
     rmse = np.sqrt(mse)
     mape = (np.abs((y_true - y_pred) / np.clip(y_true, 1e-6, None))).mean() * 100
+    avg_actual = np.mean(y_true)
+    mae_pct_of_level = (mae / avg_actual) * 100 if avg_actual > 0 else None
 
     return {
         "horizon": horizon,
@@ -781,6 +783,8 @@ def backtest_and_score(df, model_name, horizon=8):
         "mae": mae,
         "rmse": rmse,
         "mape": mape,
+        "avg_actual": avg_actual,
+        "mae_pct_of_level": mae_pct_of_level,
     }
 
 
@@ -800,10 +804,33 @@ def build_forecast_summary(history_df, forecast_df):
     return summary
 
 # AI Recommendation Input
-def generate_recommendation(history_df, forecast_df, model_choice, horizon_weeks):
-        summary = build_forecast_summary(history_df, forecast_df)
+def generate_recommendation(history_df, forecast_df, model_choice, horizon_weeks, metrics=None):
+    summary = build_forecast_summary(history_df, forecast_df)
 
-        prompt = f"""
+    reliability_text = "Backtest accuracy was not available."
+    if metrics is not None:
+        reliability_text = (
+            f"Backtest over the last {metrics['horizon']} weeks: "
+            f"MAE = {metrics['mae']:.1f}, "
+            f"RMSE = {metrics['rmse']:.1f}. "
+            f"Lower values indicate better forecast accuracy. "
+        )
+
+        if metrics["rmse"] > metrics["mae"] * 1.4:
+            reliability_text += (
+                "RMSE is meaningfully higher than MAE, suggesting some weeks had larger forecast misses. "
+            )
+        else:
+            reliability_text += (
+                "RMSE is fairly close to MAE, suggesting forecast errors were relatively stable week to week. "
+            )
+
+        if "mae_pct_of_level" in metrics and metrics["mae_pct_of_level"] is not None:
+            reliability_text += (
+                f"MAE is about {metrics['mae_pct_of_level']:.1f}% of the average weekly observed level. "
+            )
+
+    prompt = f"""
 You are an EMS operations advisor for a Canadian ambulance service.
 
 Here is a concise summary of recent history and forecast:
@@ -812,19 +839,24 @@ Here is a concise summary of recent history and forecast:
 Model used: {model_choice}
 Forecast horizon: {horizon_weeks} weeks.
 
+Forecast reliability from backtesting:
+{reliability_text}
+
 Using this information, write a short, practical recommendation
 (4–6 sentences) for managers:
 - focus on staffing, training, and PPE planning
 - be concrete but not alarmist
+- explain the forecast confidence in plain language
+- if backtest accuracy is weaker, recommend more cautious use of the forecast
 - assume audience is non-technical.
 """
 
-        response = genai_client.models.generate_content(
-            model=MODEL_NAME,      # e.g. "gemini-3-flash-preview"
-            contents=prompt,
-        )
+    response = genai_client.models.generate_content(
+        model=MODEL_NAME,
+        contents=prompt,
+    )
 
-        return response.text
+    return response.text
 
 if "run_forecast" not in st.session_state:
     st.session_state["run_forecast"] = False
