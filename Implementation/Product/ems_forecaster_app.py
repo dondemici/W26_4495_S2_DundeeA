@@ -12,6 +12,7 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 import sklearn
 from sklearn.ensemble import RandomForestRegressor
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 import requests  # new
 from google import genai
@@ -316,7 +317,6 @@ def fetch_ticketmaster_events(start_dt, end_dt):
 
 
 history_df, debug_info = load_weekly_exposures_from_fact()
-
 
 
 # ---------- 3. Sidebar controls ----------
@@ -723,6 +723,68 @@ def ml_forecast(df, horizon, n_lags=4):
         "yhat_upper": upper,
     })
 
+
+def backtest_and_score(df, model_name, horizon=8):
+    """
+    Use the last `horizon` weeks as a test set.
+    Fit the chosen model on the earlier history, forecast those weeks,
+    and compute MAE / RMSE / MAPE.
+    """
+    df = df.sort_values("week_start").reset_index(drop=True)
+
+    if len(df) <= horizon + 8:  # need some history
+        return None
+
+    train = df.iloc[:-horizon].copy()
+    test = df.iloc[-horizon:].copy()
+
+    if model_name == "Naive":
+        fcst = naive_forecast(train, horizon)
+    elif model_name == "Moving Average":
+        fcst = moving_average_forecast(train, horizon)
+    elif model_name == "Exponential Smoothing":
+        fcst = ses_forecast(train, horizon)
+    elif model_name == "Holt":
+        fcst = holt_forecast(train, horizon)
+    elif model_name == "Holt-Winters":
+        try:
+            fcst = holt_winters_forecast(train, horizon)
+        except ValueError:
+            return None
+    elif model_name == "SARIMA":
+        fcst = sarima_forecast(train, horizon, use_weather=False, use_events=False)
+    elif model_name == "ML (Experimental)":
+        fcst = ml_forecast(train, horizon)
+    else:
+        fcst = naive_forecast(train, horizon)
+
+    merged = pd.merge(
+        test[["week_start", "exposures"]],
+        fcst[["week_start", "yhat"]],
+        on="week_start",
+        how="inner",
+    )
+    if merged.empty:
+        return None
+
+    y_true = merged["exposures"].values
+    y_pred = merged["yhat"].values
+
+    mae = mean_absolute_error(y_true, y_pred)
+    mse = mean_squared_error(y_true, y_pred)
+    rmse = np.sqrt(mse)
+    mape = (np.abs((y_true - y_pred) / np.clip(y_true, 1e-6, None))).mean() * 100
+
+    return {
+        "horizon": horizon,
+        "n_points": len(merged),
+        "mae": mae,
+        "rmse": rmse,
+        "mape": mape,
+    }
+
+
+
 def build_forecast_summary(history_df, forecast_df):
     last_hist = history_df["week_start"].max().date().isoformat()
     avg_hist = history_df["exposures"].tail(8).mean()
@@ -810,14 +872,14 @@ else:
     else:  # Prophet placeholder
         forecast_df = naive_forecast(history_df, horizon_weeks)
     
-    st.subheader("Historical weekly exposures + forecast")
+    #st.subheader("Historical weekly exposures + forecast")
 
     chart_data = pd.concat([
         history_df[["week_start", "exposures"]].rename(columns={"exposures": "Historical"}).set_index("week_start"),
         forecast_df[["week_start", "yhat"]].rename(columns={"yhat": "Forecast (baseline)"}).set_index("week_start"),
     ], axis=1)
 
-    st.line_chart(chart_data)
+    #st.line_chart(chart_data)
 
     updated_forecast_df = None
     if show_original_vs_updated:
@@ -846,6 +908,9 @@ else:
             "Forecast horizon",
             f"{horizon_weeks} weeks"
         )
+
+
+
 
     # ---------- 5b. Plot historical + forecast ----------
     st.subheader("Historical weekly exposures + forecast")
@@ -887,6 +952,20 @@ else:
         hide_index=True,
         disabled=True,
     )
+
+        # ---------- 5a. Backtest accuracy ----------
+    metrics = backtest_and_score(history_df, model_choice, horizon=horizon_weeks)
+
+    if metrics is not None:
+        st.subheader(f"Backtest accuracy (last {metrics['horizon']} weeks)")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Test horizon", f"{metrics['horizon']} weeks")
+        c2.metric("Points", str(metrics["n_points"]))
+        c3.metric("MAE", f"{metrics['mae']:.1f}")
+        c4.metric("RMSE", f"{metrics['rmse']:.1f}")
+    else:
+        st.info("Not enough history to compute backtest accuracy yet.")
+
 
     # ---------- 5c. Original vs updated overlay ----------
     if show_original_vs_updated and updated_forecast_df is not None:
@@ -950,7 +1029,13 @@ else:
 
     st.write(ai_reco)
 
-    with st.expander("Debug exposure load"):
-        st.write(debug_info)
-        st.write(history_df.head())
-        st.write(history_df.tail())
+
+    st.caption(
+        "MAE = average absolute error in weekly exposures. "
+        "MAPE = average error as a percentage of actual volume."
+    )
+
+    #with st.expander("Debug exposure load"):
+    #    st.write(debug_info)
+    #    st.write(history_df.head())
+    #    st.write(history_df.tail())
