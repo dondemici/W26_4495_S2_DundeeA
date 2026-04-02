@@ -846,7 +846,7 @@ Using this information, write a short, practical recommendation
 (4–6 sentences) for managers:
 - focus on staffing, training, and PPE planning
 - be concrete but not alarmist
-- explain the forecast confidence in plain language
+- explicitly reference the backtest results (e.g., MAE/RMSE or percentage error) in plain language
 - if backtest accuracy is weaker, recommend more cautious use of the forecast
 - assume audience is non-technical.
 """
