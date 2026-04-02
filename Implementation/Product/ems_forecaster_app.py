@@ -109,60 +109,143 @@ def fetch_weather_daily_openmeteo(start_date, end_date,
     })
     return daily
 
+#load from SQL
+#@st.cache_data(ttl=3600)
+#def load_weekly_exposures_from_fact():
+#    engine = get_engine()
+
+#    chunks = pd.read_sql(
+#        """
+#        SELECT PcrKey, EventTime_raw, exposure_flag
+#        FROM dbo.PCR_Exposure_All
+#        """,
+#        engine,
+#        chunksize=100_000,
+#    )
+
+#    daily_counts = {}
+
+#    for chunk in chunks:
+        # 1) Parse datetime exactly as in notebook
+#        chunk["event_dt"] = pd.to_datetime(
+#            chunk["EventTime_raw"].astype(str).str.strip(),
+#            format="%d%b%Y:%H:%M:%S",
+#            errors="coerce",
+#        )
+
+        # 2) Keep valid datetimes and exposure_flag == 1
+#        chunk = chunk[
+#            chunk["event_dt"].notna()
+#            & (chunk["exposure_flag"] == 1)
+#        ]
+
+        # 3) Count per calendar day
+#        vc = chunk["event_dt"].dt.date.value_counts()
+#        for d, c in vc.items():
+#            daily_counts[d] = daily_counts.get(d, 0) + c
+
+    # 4) Build daily series
+#    if not daily_counts:
+#        return pd.DataFrame(columns=["week_start", "exposures"])
+
+#    daily = pd.Series(daily_counts).sort_index()
+#    daily.index = pd.to_datetime(daily.index)
+#    daily = daily.asfreq("D", fill_value=0)
+#    daily.name = "exposure_count"
+
+    # 5) Collapse to weekly (Mon-based) for the app
+#    weekly = (
+#        daily
+#        .resample("W-MON")
+#        .sum()
+#        .rename("exposures")
+#        .reset_index()
+#        .rename(columns={"index": "week_start"})
+#    )
+
+#    return weekly
+
+CSV_PATH = Path(__file__).resolve().parents[2] / "Misc" / "PCR_Exposure_Final.csv"
+
 @st.cache_data(ttl=3600)
 def load_weekly_exposures_from_fact():
-    engine = get_engine()
-
-    chunks = pd.read_sql(
-        """
-        SELECT PcrKey, EventTime_raw, exposure_flag
-        FROM dbo.PCR_Exposure_Minimal
-        """,
-        engine,
+    chunks = pd.read_csv(
+        CSV_PATH,
+        header=None,
+        names=["PcrKey", "EventTime_raw"],
         chunksize=100_000,
     )
 
     daily_counts = {}
+    debug_rows = []
+    total_rows = 0
+    total_valid = 0
+    total_2023_rows = 0
+    total_2023_valid = 0
 
     for chunk in chunks:
-        # 1) Parse datetime exactly as in notebook
+        total_rows += len(chunk)
+
+        raw_str = chunk["EventTime_raw"].astype(str).str.strip()
+
+        is_2023 = raw_str.str.contains("2023", na=False)
+        total_2023_rows += int(is_2023.sum())
+
         chunk["event_dt"] = pd.to_datetime(
-            chunk["EventTime_raw"].astype(str).str.strip(),
+            raw_str,
             format="%d%b%Y:%H:%M:%S",
             errors="coerce",
         )
 
-        # 2) Keep valid datetimes and exposure_flag == 1
-        chunk = chunk[
-            chunk["event_dt"].notna()
-            & (chunk["exposure_flag"] == 1)
-        ]
+        valid_mask = chunk["event_dt"].notna()
+        total_valid += int(valid_mask.sum())
+        total_2023_valid += int((is_2023 & valid_mask).sum())
 
-        # 3) Count per calendar day
+        sample_good_2023 = chunk.loc[is_2023 & valid_mask, "EventTime_raw"].head(5).tolist()
+        sample_bad_2023 = chunk.loc[is_2023 & ~valid_mask, "EventTime_raw"].head(5).tolist()
+
+        if sample_good_2023 or sample_bad_2023:
+            debug_rows.append({
+                "sample_good_2023": sample_good_2023,
+                "sample_bad_2023": sample_bad_2023,
+            })
+
+        chunk = chunk[valid_mask]
+
         vc = chunk["event_dt"].dt.date.value_counts()
         for d, c in vc.items():
             daily_counts[d] = daily_counts.get(d, 0) + c
 
-    # 4) Build daily series
     if not daily_counts:
-        return pd.DataFrame(columns=["week_start", "exposures"])
+        weekly = pd.DataFrame(columns=["week_start", "exposures"])
+    else:
+        daily = pd.Series(daily_counts).sort_index()
+        daily.index = pd.to_datetime(daily.index)
+        daily = daily.asfreq("D", fill_value=0)
+        daily.name = "exposure_count"
 
-    daily = pd.Series(daily_counts).sort_index()
-    daily.index = pd.to_datetime(daily.index)
-    daily = daily.asfreq("D", fill_value=0)
-    daily.name = "exposure_count"
+        weekly = (
+            daily
+            .resample("W-MON")
+            .sum()
+            .rename("exposures")
+            .reset_index()
+            .rename(columns={"index": "week_start"})
+        )
 
-    # 5) Collapse to weekly (Mon-based) for the app
-    weekly = (
-        daily
-        .resample("W-MON")
-        .sum()
-        .rename("exposures")
-        .reset_index()
-        .rename(columns={"index": "week_start"})
-    )
+    debug_info = {
+        "csv_path": str(CSV_PATH),
+        "total_rows": total_rows,
+        "total_valid": total_valid,
+        "total_2023_rows": total_2023_rows,
+        "total_2023_valid": total_2023_valid,
+        "weekly_min": None if weekly.empty else weekly["week_start"].min(),
+        "weekly_max": None if weekly.empty else weekly["week_start"].max(),
+        "debug_samples": debug_rows[:3],
+    }
 
-    return weekly
+    return weekly, debug_info
+
 
 
 TM_API_KEY = st.secrets["TICKETMASTER_API_KEY"]
@@ -232,7 +315,7 @@ def fetch_ticketmaster_events(start_dt, end_dt):
         return pd.DataFrame(columns=["week_start", "n_events"])
 
 
-history_df = load_weekly_exposures_from_fact()
+history_df, debug_info = load_weekly_exposures_from_fact()
 
 
 
@@ -866,3 +949,8 @@ else:
         ai_reco = "(AI recommendation skipped.)"
 
     st.write(ai_reco)
+
+    with st.expander("Debug exposure load"):
+        st.write(debug_info)
+        st.write(history_df.head())
+        st.write(history_df.tail())
