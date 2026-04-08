@@ -359,11 +359,15 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Options**")
 
-    show_conf = st.checkbox("Show confidence band", value=False)
+    #show_conf = st.checkbox("Show confidence band", value=False)
+    show_forecast_table = st.checkbox("Show forecast table", value=False)
+    show_model_comparison = st.checkbox("Show model comparison", value=False)
+    #show_original_vs_updated = st.checkbox("Show original vs updated forecast", value=False)
+    use_ai_recommendation = st.checkbox("Generate AI manager recommendation", value=False)
     use_events = st.checkbox("Include major events (concerts, rallies, holidays)", value=False)
     use_weather = st.checkbox("Include weather effects (rain/snow)", value=False)
-    show_original_vs_updated = st.checkbox("Show original vs updated forecast", value=False)
-    use_ai_recommendation = st.checkbox("Generate AI manager recommendation", value=False)
+    exclude_2023_from_training = st.checkbox("Exclude 2023 from SARIMA training",value=True)
+
 
     run_button = st.button("Run forecast")
     if run_button:
@@ -529,15 +533,25 @@ def sarima_forecast(df, horizon, use_weather=False, use_events=False):
 
     exog_train = df[exog_cols].ffill() if exog_cols else None
 
+    n = len(y)
+
+    # If we only have ~1 year (like 2024 only), drop the seasonal part
+    if n < 80:
+        order = (1, 0, 1)
+        seasonal_order = (0, 0, 0, 0)
+    else:
+        order = (1, 0, 0)
+        seasonal_order = (0, 1, 1, 52)
+
     model = SARIMAX(
         y,
-        order=(1, 0, 1),
-        seasonal_order=(1, 1, 1, 52),
-        enforce_stationarity=False,
-        enforce_invertibility=False,
+        order=order,
+        seasonal_order=seasonal_order,
+        enforce_stationarity=True,
+        enforce_invertibility=True,
         exog=exog_train,
     )
-    results = model.fit(disp=False)
+    results = model.fit(disp=False, method="lbfgs")
 
     last_date = y.index.max()
     future_dates = pd.date_range(
@@ -803,6 +817,62 @@ def build_forecast_summary(history_df, forecast_df):
     )
     return summary
 
+
+def run_model_forecast(model_name, df, horizon, use_weather=False, use_events=False):
+    if model_name == "Naive":
+        return naive_forecast(df, horizon)
+
+    elif model_name == "Moving Average":
+        return moving_average_forecast(df, horizon)
+
+    elif model_name == "Exponential Smoothing":
+        return ses_forecast(df, horizon)
+
+    elif model_name == "Holt":
+        return holt_forecast(df, horizon)
+
+    elif model_name == "Holt-Winters":
+        if len(df) < 2 * 52:
+            st.warning("Not enough history for Holt-Winters; using Holt instead.")
+            return holt_forecast(df, horizon)
+        return holt_winters_forecast(df, horizon)
+
+    elif model_name == "SARIMA":
+        base_df = history_with_events.copy()
+
+        if year_filter != "All years":
+            selected_year = int(year_filter)
+            base_df = base_df[base_df["week_start"].dt.year == selected_year]
+
+        if exclude_2023_from_training:
+            base_df = base_df[base_df["week_start"].dt.year >= 2024]
+
+        if base_df.empty or len(base_df) < 30:
+            st.error(
+                f"SARIMA needs more clean data to fit (have {len(base_df)} weeks after filters). "
+                "Try including more years or disabling the 2023 exclusion."
+            )
+            st.stop()
+
+        with st.expander("Debug SARIMA input"):
+            st.write("Rows passed to SARIMA:", len(base_df))
+            st.write(base_df[["week_start", "exposures"]].head())
+            st.write(base_df[["week_start", "exposures"]].tail())
+
+        return sarima_forecast(
+            base_df,
+            horizon,
+            use_weather=use_weather,
+            use_events=use_events,
+        )
+
+    elif model_name == "ML (Experimental)":
+        return ml_forecast(history_df, horizon)
+
+    else:
+        return naive_forecast(df, horizon)
+
+
 # AI Recommendation Input
 def generate_recommendation(history_df, forecast_df, model_choice, horizon_weeks, metrics=None):
     summary = build_forecast_summary(history_df, forecast_df)
@@ -846,11 +916,7 @@ Using this information, write a short, practical recommendation
 (4–6 sentences) for managers:
 - focus on staffing, training, and PPE planning
 - be concrete but not alarmist
-<<<<<<< HEAD
 - explain the forecast confidence in plain language
-=======
-- explicitly reference the backtest results (e.g., MAE/RMSE or percentage error) in plain language
->>>>>>> ded9ec46a77a1bedcc1fea46816ab749e7014d9f
 - if backtest accuracy is weaker, recommend more cautious use of the forecast
 - assume audience is non-technical.
 """
@@ -912,11 +978,25 @@ else:
             key="ai_model_choice_main",
         )
 
+    
+
+    # make sure week_start is datetime
+    history_df["week_start"] = pd.to_datetime(history_df["week_start"])
+
     filtered_history_df = history_df.copy()
 
+
     if year_filter != "All years":
+        selected_year = int(year_filter)
         filtered_history_df = filtered_history_df[
-            filtered_history_df["week_start"].dt.year == int(year_filter)
+            filtered_history_df["week_start"].dt.year == selected_year
+        ]
+
+    sarima_train_df = filtered_history_df.copy()
+
+    if exclude_2023_from_training:
+        sarima_train_df = sarima_train_df[
+            sarima_train_df["week_start"].dt.year >= 2024
         ]
 
     if filtered_history_df.empty:
@@ -924,47 +1004,89 @@ else:
         st.stop()
 
     # Switch on model_choice in the main block
-    if model_choice == "Naive":
-        forecast_df = naive_forecast(history_df, horizon_weeks)
-    elif model_choice == "Moving Average":
-        forecast_df = moving_average_forecast(history_df, horizon_weeks)
-    elif model_choice == "Exponential Smoothing":
-        forecast_df = ses_forecast(history_df, horizon_weeks)
-    elif model_choice == "Holt":
-        forecast_df = holt_forecast(history_df, horizon_weeks)
-    elif model_choice == "Holt-Winters" and len(history_df) < 2 * 52:
-        st.warning("Not enough history for Holt-Winters; using Holt instead.")
-        forecast_df = holt_forecast(history_df, horizon_weeks)
-    elif model_choice == "SARIMA":
-        base_df = history_with_events
-        forecast_df = sarima_forecast(
-            base_df,
-            horizon_weeks,
-            use_weather=use_weather,
-            use_events=use_events,
-        )
-    elif model_choice == "ML (Experimental)":
-        forecast_df = ml_forecast(history_df, horizon_weeks)
-    else:  # Prophet placeholder
-        forecast_df = naive_forecast(filtered_history_df, horizon_weeks)
+    #if model_choice == "Naive":
+    #    forecast_df = naive_forecast(filtered_history_df, horizon_weeks)
+    #elif model_choice == "Moving Average":
+    #    forecast_df = moving_average_forecast(filtered_history_df, horizon_weeks)
+    #elif model_choice == "Exponential Smoothing":
+    #    forecast_df = ses_forecast(filtered_history_df, horizon_weeks)
+    #elif model_choice == "Holt":
+    #    forecast_df = holt_forecast(filtered_history_df, horizon_weeks)
+    #elif model_choice == "Holt-Winters" and len(filtered_history_df) < 2 * 52:
+    #    st.warning("Not enough history for Holt-Winters; using Holt instead.")
+    #    forecast_df = holt_forecast(filtered_history_df, horizon_weeks)
+    #elif model_choice == "SARIMA":
+        # Start from the weather/events-enriched history
+    #    base_df = history_with_events.copy()
+
+        # Optional: limit to display year for consistency
+    #    if year_filter != "All years":
+    #        selected_year = int(year_filter)
+    #        base_df = base_df[base_df["week_start"].dt.year == selected_year]
+
+        # Optional: drop 2023 from training if needed
+    #    if exclude_2023_from_training:
+    #        base_df = base_df[base_df["week_start"].dt.year >= 2024]
+
+        # Hard guard: need enough points to fit SARIMA
+    #    if base_df.empty or len(base_df) < 30:
+    #        st.error(
+    #            f"SARIMA needs more clean data to fit (have {len(base_df)} weeks after filters). "
+    #            "Try including more years or disabling the 2023 exclusion."
+    #        )
+    #        st.stop()
+
+        # Debug: show what SARIMA is actually seeing
+    #    with st.expander("Debug SARIMA input"):
+    #        st.write("Rows passed to SARIMA:", len(base_df))
+    #        st.write(base_df[["week_start", "exposures"]].head())
+    #        st.write(base_df[["week_start", "exposures"]].tail())
+
+    #    forecast_df = sarima_forecast(
+    #        base_df,
+    #        horizon_weeks,
+    #        use_weather=use_weather,
+    #        use_events=use_events,
+    #    )
+    #elif model_choice == "ML (Experimental)":
+    #    forecast_df = ml_forecast(history_df, horizon_weeks)
+    #else:  # Prophet placeholder
+    #    forecast_df = naive_forecast(filtered_history_df, horizon_weeks)
     
+    model_choice_1 = model_choice
+    model_choice_2 = None
+
+    forecast_df = run_model_forecast(
+        model_choice_1,
+        filtered_history_df,
+        horizon_weeks,
+        use_weather=use_weather,
+        use_events=use_events,
+    )
+
     #st.subheader("Historical weekly exposures + forecast")
 
     chart_data = pd.concat([
-        history_df[["week_start", "exposures"]].rename(columns={"exposures": "Historical"}).set_index("week_start"),
-        forecast_df[["week_start", "yhat"]].rename(columns={"yhat": "Forecast (baseline)"}).set_index("week_start"),
+        filtered_history_df[["week_start", "exposures"]]
+            .rename(columns={"exposures": "Historical"})
+            .set_index("week_start"),
+        forecast_df[["week_start", "yhat"]]
+            .rename(columns={"yhat": "Forecast (baseline)"})
+            .set_index("week_start"),
     ], axis=1)
 
     #st.line_chart(chart_data)
 
+    #st.line_chart(chart_data)
+
     updated_forecast_df = None
-    if show_original_vs_updated:
-        updated_forecast_df = forecast_df.copy()
-        updated_forecast_df["yhat"] = updated_forecast_df["yhat"] + 2
-        updated_forecast_df["yhat_lower"] = updated_forecast_df["yhat_lower"] + 2
-        updated_forecast_df["yhat_upper"] = updated_forecast_df["yhat_upper"] + 2
+    #if show_original_vs_updated:
+    #    updated_forecast_df = forecast_df.copy()
+    #    updated_forecast_df["yhat"] = updated_forecast_df["yhat"] + 2
+    #    updated_forecast_df["yhat_lower"] = updated_forecast_df["yhat_lower"] + 2
+    #    updated_forecast_df["yhat_upper"] = updated_forecast_df["yhat_upper"] + 2
 
-
+    
 
 
     # ---------- 5a. Summary metrics ----------
@@ -972,7 +1094,7 @@ else:
     with col1:
         st.metric(
             "Last historical week",
-            history_df["week_start"].max().date().isoformat()
+            filtered_history_df["week_start"].max().date().isoformat()
         )
     with col2:
         st.metric(
@@ -991,7 +1113,7 @@ else:
     # ---------- 5b. Plot historical + forecast ----------
     st.subheader("Historical weekly exposures + forecast")
 
-    plot_df_hist = history_df[["week_start", "exposures"]].rename(
+    plot_df_hist = filtered_history_df[["week_start", "exposures"]].rename(
         columns={"exposures": "value"}
     )
     plot_df_hist["type"] = "Historical"
@@ -1013,24 +1135,52 @@ else:
         )
         st.line_chart(chart_data)
 
-    st.markdown("**Forecast table (baseline)**")
-    table_df = (
-        forecast_df[["week_start", "yhat", "yhat_lower", "yhat_upper"]]
-        .rename(columns={
-            "week_start": "Week start",
-            "yhat": "Forecast",
-            "yhat_lower": "Lower",
-            "yhat_upper": "Upper"
-        })
-    )
-    st.data_editor(
-        table_df,
-        hide_index=True,
-        disabled=True,
-    )
+    #st.markdown("**Forecast table (baseline)**")
+    #table_df = (
+    #    forecast_df[["week_start", "yhat", "yhat_lower", "yhat_upper"]]
+    #    .rename(columns={
+    #        "week_start": "Week start",
+    #        "yhat": "Forecast",
+    #        "yhat_lower": "Lower",
+    #        "yhat_upper": "Upper"
+    #    })
+    #)
+    #st.data_editor(
+    #    table_df,
+    #    hide_index=True,
+    #    disabled=True,
+    #)
+
+    # After (wrapped):
+    if plot_df.empty:
+        st.warning("No chart data available.")
+    else:
+        chart_data = plot_df.pivot(
+            index="week_start",
+            columns="type",
+            values="value"
+        )
+    #    st.line_chart(chart_data)
+
+    if show_forecast_table:
+        st.markdown("**Forecast table (baseline)**")
+        table_df = (
+            forecast_df[["week_start", "yhat", "yhat_lower", "yhat_upper"]]
+            .rename(columns={
+                "week_start": "Week start",
+                "yhat": "Forecast",
+                "yhat_lower": "Lower",
+                "yhat_upper": "Upper"
+            })
+        )
+        st.data_editor(
+            table_df,
+            hide_index=True,
+            disabled=True,
+        )
 
         # ---------- 5a. Backtest accuracy ----------
-    metrics = backtest_and_score(history_df, model_choice, horizon=horizon_weeks)
+    metrics = backtest_and_score(filtered_history_df, model_choice, horizon=horizon_weeks)
 
     if metrics is not None:
         st.subheader(f"Backtest accuracy (last {metrics['horizon']} weeks)")
@@ -1044,18 +1194,89 @@ else:
 
 
     # ---------- 5c. Original vs updated overlay ----------
-    if show_original_vs_updated and updated_forecast_df is not None:
-        st.subheader("Original vs updated forecast (illustration)")
+    #if show_original_vs_updated and updated_forecast_df is not None:
+    #    st.subheader("Original vs updated forecast (illustration)")
 
-        comp = pd.DataFrame({
-            "week_start": forecast_df["week_start"],
-            "Baseline forecast": forecast_df["yhat"],
-            "Updated forecast": updated_forecast_df["yhat"]
-        }).set_index("week_start")
+    #    comp = pd.DataFrame({
+    #        "week_start": forecast_df["week_start"],
+    #        "Baseline forecast": forecast_df["yhat"],
+    #        "Updated forecast": updated_forecast_df["yhat"]
+    #    }).set_index("week_start")
 
-        st.line_chart(comp)
+    #    st.line_chart(comp)
 
     # ---------- 5d. Narrative explanation ----------
+     # --- Model comparison controls under subheader ---
+    if show_model_comparison:
+        st.subheader("Model comparison")
+
+        comp_col1, comp_col2 = st.columns(2)
+        with comp_col1:
+            model_choice_1 = st.selectbox(
+                "Model 1",
+                [
+                    "Prophet (default)",
+                    "Naive",
+                    "Moving Average",
+                    "Exponential Smoothing",
+                    "Holt",
+                    "Holt-Winters",
+                    "SARIMA",
+                ],
+                index=0,
+                key="model_choice_1",
+            )
+        with comp_col2:
+            model_choice_2 = st.selectbox(
+                "Model 2",
+                [
+                    "Prophet (default)",
+                    "Naive",
+                    "Moving Average",
+                    "Exponential Smoothing",
+                    "Holt",
+                    "Holt-Winters",
+                    "SARIMA",
+                ],
+                index=1,
+                key="model_choice_2",
+            )
+    else:
+        # Fallback: use sidebar model as Model 1, no Model 2
+        model_choice_1 = model_choice
+        model_choice_2 = None
+    
+    
+    if show_model_comparison and model_choice_2 is not None:
+        #st.subheader("Model comparison")
+
+        fcst1 = forecast_df.copy()
+        fcst2 = run_model_forecast(
+            model_choice_2,
+            filtered_history_df,
+            horizon_weeks,
+            use_weather=use_weather,
+            use_events=use_events,
+        )
+
+        hist_comp = filtered_history_df[["week_start", "exposures"]].rename(
+            columns={"exposures": "Historical"}
+        ).set_index("week_start")
+
+        model1_comp = fcst1[["week_start", "yhat"]].rename(
+            columns={"yhat": f"{model_choice_1}"}
+        ).set_index("week_start")
+
+        model2_comp = fcst2[["week_start", "yhat"]].rename(
+            columns={"yhat": f"{model_choice_2}"}
+        ).set_index("week_start")
+
+        comp = pd.concat([hist_comp, model1_comp, model2_comp], axis=1)
+
+        st.line_chart(comp)
+    
+    
+    
     st.subheader("Interpretation (for managers)")
 
     next4 = forecast_df.head(4)
