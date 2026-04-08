@@ -4,3 +4,5 @@ numpy
 sqlalchemy
 statsmodels
 scikit-learn
+google-genai
+pyodbc
