@@ -127,3 +127,44 @@ ul[data-testid="stSelectboxVirtualDropdown"] li[role="option"] * {
 [data-testid="stSidebar"] [data-testid="stSlider"] div[data-baseweb="slider"] > div:first-child {
   background-color: #f97316 !important;  /* orange filled part 
 }*/
+
+/* Main dashboard selectbox - closed field */
+[data-testid="stAppViewContainer"] .stSelectbox div[data-baseweb="select"] > div {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+}
+
+/* Main dashboard selectbox text */
+[data-testid="stAppViewContainer"] .stSelectbox div[data-baseweb="select"] span {
+  color: #111827 !important;
+}
+
+/* Main dashboard selectbox dropdown popup */
+ul[data-testid="stSelectboxVirtualDropdown"],
+ul[data-testid="stVirtualDropdown"] {
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+/* Dropdown options */
+ul[data-testid="stSelectboxVirtualDropdown"] li,
+ul[data-testid="stVirtualDropdown"] li {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+
+/* Hovered option */
+ul[data-testid="stSelectboxVirtualDropdown"] li:hover,
+ul[data-testid="stVirtualDropdown"] li:hover {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+}
+
+/* Selected option */
+ul[data-testid="stSelectboxVirtualDropdown"] li[aria-selected="true"],
+ul[data-testid="stVirtualDropdown"] li[aria-selected="true"] {
+  background-color: #e5e7eb !important;
+  color: #111827 !important;
+}

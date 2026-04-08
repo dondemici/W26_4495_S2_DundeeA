@@ -12,6 +12,7 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 import sklearn
 from sklearn.ensemble import RandomForestRegressor
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 import requests  # new
 from google import genai
@@ -109,60 +110,143 @@ def fetch_weather_daily_openmeteo(start_date, end_date,
     })
     return daily
 
+#load from SQL
+#@st.cache_data(ttl=3600)
+#def load_weekly_exposures_from_fact():
+#    engine = get_engine()
+
+#    chunks = pd.read_sql(
+#        """
+#        SELECT PcrKey, EventTime_raw, exposure_flag
+#        FROM dbo.PCR_Exposure_All
+#        """,
+#        engine,
+#        chunksize=100_000,
+#    )
+
+#    daily_counts = {}
+
+#    for chunk in chunks:
+        # 1) Parse datetime exactly as in notebook
+#        chunk["event_dt"] = pd.to_datetime(
+#            chunk["EventTime_raw"].astype(str).str.strip(),
+#            format="%d%b%Y:%H:%M:%S",
+#            errors="coerce",
+#        )
+
+        # 2) Keep valid datetimes and exposure_flag == 1
+#        chunk = chunk[
+#            chunk["event_dt"].notna()
+#            & (chunk["exposure_flag"] == 1)
+#        ]
+
+        # 3) Count per calendar day
+#        vc = chunk["event_dt"].dt.date.value_counts()
+#        for d, c in vc.items():
+#            daily_counts[d] = daily_counts.get(d, 0) + c
+
+    # 4) Build daily series
+#    if not daily_counts:
+#        return pd.DataFrame(columns=["week_start", "exposures"])
+
+#    daily = pd.Series(daily_counts).sort_index()
+#    daily.index = pd.to_datetime(daily.index)
+#    daily = daily.asfreq("D", fill_value=0)
+#    daily.name = "exposure_count"
+
+    # 5) Collapse to weekly (Mon-based) for the app
+#    weekly = (
+#        daily
+#        .resample("W-MON")
+#        .sum()
+#        .rename("exposures")
+#        .reset_index()
+#        .rename(columns={"index": "week_start"})
+#    )
+
+#    return weekly
+
+CSV_PATH = Path(__file__).resolve().parents[2] / "Misc" / "PCR_Exposure_Final.csv"
+
 @st.cache_data(ttl=3600)
 def load_weekly_exposures_from_fact():
-    engine = get_engine()
-
-    chunks = pd.read_sql(
-        """
-        SELECT PcrKey, EventTime_raw, exposure_flag
-        FROM dbo.PCR_Exposure_Minimal
-        """,
-        engine,
+    chunks = pd.read_csv(
+        CSV_PATH,
+        header=None,
+        names=["PcrKey", "EventTime_raw"],
         chunksize=100_000,
     )
 
     daily_counts = {}
+    debug_rows = []
+    total_rows = 0
+    total_valid = 0
+    total_2023_rows = 0
+    total_2023_valid = 0
 
     for chunk in chunks:
-        # 1) Parse datetime exactly as in notebook
+        total_rows += len(chunk)
+
+        raw_str = chunk["EventTime_raw"].astype(str).str.strip()
+
+        is_2023 = raw_str.str.contains("2023", na=False)
+        total_2023_rows += int(is_2023.sum())
+
         chunk["event_dt"] = pd.to_datetime(
-            chunk["EventTime_raw"].astype(str).str.strip(),
+            raw_str,
             format="%d%b%Y:%H:%M:%S",
             errors="coerce",
         )
 
-        # 2) Keep valid datetimes and exposure_flag == 1
-        chunk = chunk[
-            chunk["event_dt"].notna()
-            & (chunk["exposure_flag"] == 1)
-        ]
+        valid_mask = chunk["event_dt"].notna()
+        total_valid += int(valid_mask.sum())
+        total_2023_valid += int((is_2023 & valid_mask).sum())
 
-        # 3) Count per calendar day
+        sample_good_2023 = chunk.loc[is_2023 & valid_mask, "EventTime_raw"].head(5).tolist()
+        sample_bad_2023 = chunk.loc[is_2023 & ~valid_mask, "EventTime_raw"].head(5).tolist()
+
+        if sample_good_2023 or sample_bad_2023:
+            debug_rows.append({
+                "sample_good_2023": sample_good_2023,
+                "sample_bad_2023": sample_bad_2023,
+            })
+
+        chunk = chunk[valid_mask]
+
         vc = chunk["event_dt"].dt.date.value_counts()
         for d, c in vc.items():
             daily_counts[d] = daily_counts.get(d, 0) + c
 
-    # 4) Build daily series
     if not daily_counts:
-        return pd.DataFrame(columns=["week_start", "exposures"])
+        weekly = pd.DataFrame(columns=["week_start", "exposures"])
+    else:
+        daily = pd.Series(daily_counts).sort_index()
+        daily.index = pd.to_datetime(daily.index)
+        daily = daily.asfreq("D", fill_value=0)
+        daily.name = "exposure_count"
 
-    daily = pd.Series(daily_counts).sort_index()
-    daily.index = pd.to_datetime(daily.index)
-    daily = daily.asfreq("D", fill_value=0)
-    daily.name = "exposure_count"
+        weekly = (
+            daily
+            .resample("W-MON")
+            .sum()
+            .rename("exposures")
+            .reset_index()
+            .rename(columns={"index": "week_start"})
+        )
 
-    # 5) Collapse to weekly (Mon-based) for the app
-    weekly = (
-        daily
-        .resample("W-MON")
-        .sum()
-        .rename("exposures")
-        .reset_index()
-        .rename(columns={"index": "week_start"})
-    )
+    debug_info = {
+        "csv_path": str(CSV_PATH),
+        "total_rows": total_rows,
+        "total_valid": total_valid,
+        "total_2023_rows": total_2023_rows,
+        "total_2023_valid": total_2023_valid,
+        "weekly_min": None if weekly.empty else weekly["week_start"].min(),
+        "weekly_max": None if weekly.empty else weekly["week_start"].max(),
+        "debug_samples": debug_rows[:3],
+    }
 
-    return weekly
+    return weekly, debug_info
+
 
 
 TM_API_KEY = st.secrets["TICKETMASTER_API_KEY"]
@@ -232,8 +316,7 @@ def fetch_ticketmaster_events(start_dt, end_dt):
         return pd.DataFrame(columns=["week_start", "n_events"])
 
 
-history_df = load_weekly_exposures_from_fact()
-
+history_df, debug_info = load_weekly_exposures_from_fact()
 
 
 # ---------- 3. Sidebar controls ----------
@@ -260,7 +343,7 @@ with st.sidebar:
             "Holt",
             "Holt-Winters",
             "SARIMA",
-            "ML (Experimental)",
+            #"ML (Experimental)",
         ],
         index=0,
     )
@@ -640,6 +723,72 @@ def ml_forecast(df, horizon, n_lags=4):
         "yhat_upper": upper,
     })
 
+
+def backtest_and_score(df, model_name, horizon=8):
+    """
+    Use the last `horizon` weeks as a test set.
+    Fit the chosen model on the earlier history, forecast those weeks,
+    and compute MAE / RMSE / MAPE.
+    """
+    df = df.sort_values("week_start").reset_index(drop=True)
+
+    if len(df) <= horizon + 8:  # need some history
+        return None
+
+    train = df.iloc[:-horizon].copy()
+    test = df.iloc[-horizon:].copy()
+
+    if model_name == "Naive":
+        fcst = naive_forecast(train, horizon)
+    elif model_name == "Moving Average":
+        fcst = moving_average_forecast(train, horizon)
+    elif model_name == "Exponential Smoothing":
+        fcst = ses_forecast(train, horizon)
+    elif model_name == "Holt":
+        fcst = holt_forecast(train, horizon)
+    elif model_name == "Holt-Winters":
+        try:
+            fcst = holt_winters_forecast(train, horizon)
+        except ValueError:
+            return None
+    elif model_name == "SARIMA":
+        fcst = sarima_forecast(train, horizon, use_weather=False, use_events=False)
+    elif model_name == "ML (Experimental)":
+        fcst = ml_forecast(train, horizon)
+    else:
+        fcst = naive_forecast(train, horizon)
+
+    merged = pd.merge(
+        test[["week_start", "exposures"]],
+        fcst[["week_start", "yhat"]],
+        on="week_start",
+        how="inner",
+    )
+    if merged.empty:
+        return None
+
+    y_true = merged["exposures"].values
+    y_pred = merged["yhat"].values
+
+    mae = mean_absolute_error(y_true, y_pred)
+    mse = mean_squared_error(y_true, y_pred)
+    rmse = np.sqrt(mse)
+    mape = (np.abs((y_true - y_pred) / np.clip(y_true, 1e-6, None))).mean() * 100
+    avg_actual = np.mean(y_true)
+    mae_pct_of_level = (mae / avg_actual) * 100 if avg_actual > 0 else None
+
+    return {
+        "horizon": horizon,
+        "n_points": len(merged),
+        "mae": mae,
+        "rmse": rmse,
+        "mape": mape,
+        "avg_actual": avg_actual,
+        "mae_pct_of_level": mae_pct_of_level,
+    }
+
+
+
 def build_forecast_summary(history_df, forecast_df):
     last_hist = history_df["week_start"].max().date().isoformat()
     avg_hist = history_df["exposures"].tail(8).mean()
@@ -655,10 +804,33 @@ def build_forecast_summary(history_df, forecast_df):
     return summary
 
 # AI Recommendation Input
-def generate_recommendation(history_df, forecast_df, model_choice, horizon_weeks):
-        summary = build_forecast_summary(history_df, forecast_df)
+def generate_recommendation(history_df, forecast_df, model_choice, horizon_weeks, metrics=None):
+    summary = build_forecast_summary(history_df, forecast_df)
 
-        prompt = f"""
+    reliability_text = "Backtest accuracy was not available."
+    if metrics is not None:
+        reliability_text = (
+            f"Backtest over the last {metrics['horizon']} weeks: "
+            f"MAE = {metrics['mae']:.1f}, "
+            f"RMSE = {metrics['rmse']:.1f}. "
+            f"Lower values indicate better forecast accuracy. "
+        )
+
+        if metrics["rmse"] > metrics["mae"] * 1.4:
+            reliability_text += (
+                "RMSE is meaningfully higher than MAE, suggesting some weeks had larger forecast misses. "
+            )
+        else:
+            reliability_text += (
+                "RMSE is fairly close to MAE, suggesting forecast errors were relatively stable week to week. "
+            )
+
+        if "mae_pct_of_level" in metrics and metrics["mae_pct_of_level"] is not None:
+            reliability_text += (
+                f"MAE is about {metrics['mae_pct_of_level']:.1f}% of the average weekly observed level. "
+            )
+
+    prompt = f"""
 You are an EMS operations advisor for a Canadian ambulance service.
 
 Here is a concise summary of recent history and forecast:
@@ -667,19 +839,24 @@ Here is a concise summary of recent history and forecast:
 Model used: {model_choice}
 Forecast horizon: {horizon_weeks} weeks.
 
+Forecast reliability from backtesting:
+{reliability_text}
+
 Using this information, write a short, practical recommendation
 (4–6 sentences) for managers:
 - focus on staffing, training, and PPE planning
 - be concrete but not alarmist
+- explain the forecast confidence in plain language
+- if backtest accuracy is weaker, recommend more cautious use of the forecast
 - assume audience is non-technical.
 """
 
-        response = genai_client.models.generate_content(
-            model=MODEL_NAME,      # e.g. "gemini-3-flash-preview"
-            contents=prompt,
-        )
+    response = genai_client.models.generate_content(
+        model=MODEL_NAME,
+        contents=prompt,
+    )
 
-        return response.text
+    return response.text
 
 if "run_forecast" not in st.session_state:
     st.session_state["run_forecast"] = False
@@ -693,14 +870,54 @@ if not st.session_state["run_forecast"]:
     st.info("Set options in the left sidebar, then click **Run forecast**.")
 else:
     # Main-page slider above the graph/results
-    horizon_weeks = st.slider(
-        "Forecast horizon (weeks)",
-        min_value=1,
-        max_value=24,
-        value=st.session_state["horizon_weeks"],
-        step=1,
-        key="horizon_weeks",
-    )
+    st.subheader("Forecast controls")
+
+    control_col1, control_col2, control_col3 = st.columns(3)
+
+    with control_col1:
+        horizon_weeks = st.slider(
+            "Forecast horizon (weeks)",
+            min_value=1,
+            max_value=24,
+            value=st.session_state.get("horizon_weeks", 1),
+            step=1,
+            key="horizon_weeks",
+        )
+
+    with control_col2:
+        available_years = sorted(history_df["week_start"].dt.year.dropna().unique().tolist())
+        year_options = ["All years"] + [str(y) for y in available_years]
+
+        year_filter = st.selectbox(
+            "Year",
+            options=year_options,
+            index=0,
+            key="year_filter_main",
+        )
+
+    with control_col3:
+        ai_model_choice = st.selectbox(
+            "AI model used",
+            options=[
+                "Gemini",
+                "OpenAI",
+                "Claude",
+                "None",
+            ],
+            index=0,
+            key="ai_model_choice_main",
+        )
+
+    filtered_history_df = history_df.copy()
+
+    if year_filter != "All years":
+        filtered_history_df = filtered_history_df[
+            filtered_history_df["week_start"].dt.year == int(year_filter)
+        ]
+
+    if filtered_history_df.empty:
+        st.warning("No data available for the selected year.")
+        st.stop()
 
     # Switch on model_choice in the main block
     if model_choice == "Naive":
@@ -725,16 +942,16 @@ else:
     elif model_choice == "ML (Experimental)":
         forecast_df = ml_forecast(history_df, horizon_weeks)
     else:  # Prophet placeholder
-        forecast_df = naive_forecast(history_df, horizon_weeks)
+        forecast_df = naive_forecast(filtered_history_df, horizon_weeks)
     
-    st.subheader("Historical weekly exposures + forecast")
+    #st.subheader("Historical weekly exposures + forecast")
 
     chart_data = pd.concat([
         history_df[["week_start", "exposures"]].rename(columns={"exposures": "Historical"}).set_index("week_start"),
         forecast_df[["week_start", "yhat"]].rename(columns={"yhat": "Forecast (baseline)"}).set_index("week_start"),
     ], axis=1)
 
-    st.line_chart(chart_data)
+    #st.line_chart(chart_data)
 
     updated_forecast_df = None
     if show_original_vs_updated:
@@ -763,6 +980,9 @@ else:
             "Forecast horizon",
             f"{horizon_weeks} weeks"
         )
+
+
+
 
     # ---------- 5b. Plot historical + forecast ----------
     st.subheader("Historical weekly exposures + forecast")
@@ -804,6 +1024,20 @@ else:
         hide_index=True,
         disabled=True,
     )
+
+        # ---------- 5a. Backtest accuracy ----------
+    metrics = backtest_and_score(history_df, model_choice, horizon=horizon_weeks)
+
+    if metrics is not None:
+        st.subheader(f"Backtest accuracy (last {metrics['horizon']} weeks)")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Test horizon", f"{metrics['horizon']} weeks")
+        c2.metric("Points", str(metrics["n_points"]))
+        c3.metric("MAE", f"{metrics['mae']:.1f}")
+        c4.metric("RMSE", f"{metrics['rmse']:.1f}")
+    else:
+        st.info("Not enough history to compute backtest accuracy yet.")
+
 
     # ---------- 5c. Original vs updated overlay ----------
     if show_original_vs_updated and updated_forecast_df is not None:
@@ -866,3 +1100,14 @@ else:
         ai_reco = "(AI recommendation skipped.)"
 
     st.write(ai_reco)
+
+
+    st.caption(
+        "MAE = average absolute error in weekly exposures. "
+        "MAPE = average error as a percentage of actual volume."
+    )
+
+    #with st.expander("Debug exposure load"):
+    #    st.write(debug_info)
+    #    st.write(history_df.head())
+    #    st.write(history_df.tail())
