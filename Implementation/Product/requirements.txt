@@ -1,8 +1,10 @@
 streamlit
 pandas
 numpy
-sqlalchemy
 statsmodels
 scikit-learn
-google-genai
+sqlalchemy
 pyodbc
+requests
+google-genai
+openai

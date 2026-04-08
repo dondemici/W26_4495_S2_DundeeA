@@ -16,6 +16,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 import requests  # new
 from google import genai
+from openai import OpenAI
 
 def load_css(file_name: str):
     css_path = Path(__file__).parent / file_name
@@ -26,7 +27,20 @@ load_css("style.css")
 
 
 genai_client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-MODEL_NAME = "gemini-3-flash-preview"  # or any current model
+openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+#MODEL_NAME = "gemini-3-flash-preview"  # or any current model
+GEMINI_MODEL_NAME = "gemini-2.0-flash"
+OPENAI_MODEL_NAME = "gpt-5"
+
+# Optional OpenAI client (may not be installed)
+try:
+    openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    OPENAI_AVAILABLE = True
+except ImportError:
+    openai_client = None
+    OPENAI_AVAILABLE = False
+
 
 # ---------- 1. Page config ----------
 st.set_page_config(
@@ -34,6 +48,9 @@ st.set_page_config(
     layout="wide"
     
 )
+
+
+
 
 st.title("EMS Work‑Related Injury Forecast")
 st.caption("Prototype app – weekly exposures forecast with several forecasting models")
@@ -874,7 +891,8 @@ def run_model_forecast(model_name, df, horizon, use_weather=False, use_events=Fa
 
 
 # AI Recommendation Input
-def generate_recommendation(history_df, forecast_df, model_choice, horizon_weeks, metrics=None):
+#def generate_recommendation(history_df, forecast_df, model_choice, horizon_weeks, metrics=None):
+def generate_recommendation(history_df, forecast_df, model_choice, horizon_weeks, ai_provider, metrics=None):
     summary = build_forecast_summary(history_df, forecast_df)
 
     reliability_text = "Backtest accuracy was not available."
@@ -914,19 +932,41 @@ Forecast reliability from backtesting:
 
 Using this information, write a short, practical recommendation
 (4–6 sentences) for managers:
+- clearly mention the MAE and RMSE values in plain language
+  (e.g. 'on average we miss by about X exposures per week')
+- if available, mention what MAE as a % of average weekly volume implies
+  for planning (e.g. 'typical error is about Y% of normal volume')
+- highlight whether RMSE being higher than MAE suggests occasional large misses
 - focus on staffing, training, and PPE planning
 - be concrete but not alarmist
 - explain the forecast confidence in plain language
-- if backtest accuracy is weaker, recommend more cautious use of the forecast
-- assume audience is non-technical.
+- if backtest accuracy is weaker, recommend using the forecast more cautiously
+- assume the audience is non-technical.
 """
 
-    response = genai_client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt,
-    )
+    if ai_provider == "OpenAI":
+        if not OPENAI_AVAILABLE:
+            return "(OpenAI SDK not installed. Install `openai` and set OPENAI_API_KEY.)"
+        response = openai_client.responses.create(
+            model=OPENAI_MODEL_NAME,
+            input=prompt,
+        )
+        return response.output_text
 
-    return response.text
+    elif ai_provider == "Gemini":
+        try:
+            response = genai_client.models.generate_content(
+                model=GEMINI_MODEL_NAME,
+                contents=prompt,
+            )
+            return response.text
+        except Exception:
+            return "(Gemini quota exceeded or unavailable. Try OpenAI instead.)"
+
+    elif ai_provider == "Claude":
+        return "(Claude integration not implemented yet.)"
+
+    return "(AI recommendation skipped.)"
 
 if "run_forecast" not in st.session_state:
     st.session_state["run_forecast"] = False
@@ -971,10 +1011,9 @@ else:
             options=[
                 "Gemini",
                 "OpenAI",
-                "Claude",
                 "None",
             ],
-            index=0,
+            index=1,  # 0=Gemini, 1=OpenAI
             key="ai_model_choice_main",
         )
 
@@ -1317,7 +1356,12 @@ else:
         with st.spinner("Generating manager recommendation..."):
             try:
                 ai_reco = generate_recommendation(
-                    history_df, forecast_df, model_choice, horizon_weeks
+                    history_df,
+                    forecast_df,
+                    model_choice,
+                    horizon_weeks,
+                    ai_model_choice,
+                    metrics=metrics,
                 )
             except Exception as e:
                 ai_reco = f"(Error generating recommendation: {e})"
