@@ -1,53 +1,95 @@
 # EMS Work-Related Exposure Forecasting – Riipen Project
-Predicting weekly work-related exposure events among Emergency Medical Services (EMS) clinicians using the NEMSIS Public-Use Dataset. The project focuses on building a product for EMS managers: a forecasting tool that surfaces high‑risk weeks in advance so they can plan staffing and safety interventions before exposures spike.
+Forecasting weekly work‑related exposure events among Emergency Medical Services (EMS) clinicians using a cleaned 2024 cohort derived from the NEMSIS public‑use dataset and local extracts. The project delivers a practical product for EMS managers: a forecasting dashboard that highlights higher‑risk weeks in advance so they can plan staffing and safety interventions before exposures spike.
 
 
 ## Project / Product Description
-This repository contains the code and assets for my Douglas College CSIS 4495 Riipen project with Solaris Canada. The current midterm prototype focuses on:
+This repository contains the code and assets for my Douglas College CSIS 4495 Riipen project with Solaris Canada. The final prototype focuses on a single, well‑defined outcome and an interpretable, operationally useful forecasting workflow.
 
 ### Outcome: 
-Work‑related exposure events among EMS clinicians (e.g., blood and body fluid exposures), identified from NEMSIS work‑related exposure coding and filtered to “Yes” cases only.
+Work‑related exposure events among EMS clinicians (for example, blood and body‑fluid exposures), identified using the NEMSIS work‑related exposure flag and restricted to “Yes” cases only.
+
+The project forecasts weekly counts of exposure‑flagged events rather than attempting to model detailed injury mechanisms or severity, which are not consistently available in the public research data.
 
 ### Data layer:
-- SQL Server pipeline reading large NEMSIS v3 tables (e.g., PCR_Events, FACTPCRWorkRelatedExposure, FACTPCR time data).
-- Staging tables used to query tens of millions of records efficiently from Jupyter.
-- Cleaning and exploration of January 2024 (~90K rows) to validate exposure fields and coding.
-- Identification that hospital admit time (eOutcome11) is not usable for exposure cases (mostly “Not Applicable”), leading to the adoption of FACTPCR operational times as the main time source.
-- In‑progress construction of a 2024 weekly work‑related exposure time series (~20K exposure events expected).
+- A SQL Server pipeline reads large NEMSIS v3 tables and local FACT/PCR tables, filters to exposure‑positive PCRs, and handles Not Applicable / Not Recorded codes.
+- Operational time fields from the FACT/PCR layer are used as the primary time base for exposure events, after determining that hospital outcome times (e.g., eOutcome11) are largely unusable for this cohort.
+- The pipeline aggregates exposure events per calendar day and then resamples to a Monday‑based weekly series of exposure counts.
+- The final app reads from a compact CSV export (for example, PCR_Exposure_Final.csv), avoiding heavy runtime joins and making the Streamlit app lightweight and portable.
 
 ### Scope decisions & constraints:
-- NEMSIS public data does not include detailed provider injury mechanisms at the national level; this information is only available in some state‑level systems, so the project models when exposures occur, not the exact cause.
-- Midterm prototype uses a synthetic weekly baseline series that mimics realistic exposure patterns while the full PCR‑time join and aggregation are completed.
+- The NEMSIS public‑use data and local extracts do not provide complete, reliable provider injury‑mechanism or hospital‑outcome detail at scale, so the project models when exposures occur, not the exact cause or long‑term outcome.
+- To keep the project feasible within the course timeline, the scope narrows to:
+  #### - One year of exposure‑flagged events (2024) with a consistent time field.
+  #### - A single weekly exposure count time series.
+  #### - A small, interpretable set of time‑series models plus explicit forecast‑accuracy checks
+- Earlier ideas such as multi‑year demand forecasting, disabling‑injury prediction, and geospatial “hot‑spot” analysis were dropped in favor of delivering a complete, end‑to‑end exposure‑forecasting product.
 
 ### Model layer:
-- Model‑agnostic design: the app can plug in SARIMA, Prophet, or simpler baseline forecasters depending on signal strength in the final weekly series.
-- Current midterm demo runs on a placeholder forecaster over the synthetic weekly series, producing:
-  #### - Point forecasts for future weekly exposure counts.
-  #### - Simple lower/upper bounds for each week.
+- The app exposes several interpretable time‑series models rather than a single black‑box ML pipeline. Available methods include:
+  #### - Naive baseline.
+  #### - Moving‑average forecast.
+  #### - Simple Exponential Smoothing.
+  #### - Holt trend model.
+  #### - Holt‑Winters (trend + seasonality; runs only when there is enough history).
+  #### - SARIMA, with optional weather and major‑event covariates.
+- For each selected model and forecast horizon, the app produces:
+  #### - Weekly point forecasts (yhat).
+  #### - Simple or model‑based upper/lower bounds (yhat_lower, yhat_upper).
+- A rolling backtest routine holds out recent weeks, refits the model on earlier data, and reports:
+  #### - Mean Absolute Error (MAE).
+  #### - Root Mean Squared Error (RMSE).
+  #### - MAE as a percentage of the average weekly exposure level.
 
 ### Application layer (product):
 
-- A Streamlit web app called EMS Work‑Related Exposure Forecaster that EMS leaders can open in a browser and use as if it were a production tool.
+- The core product is a Streamlit web app called EMS Work‑Related Injury / Exposure Forecaster that EMS leaders can open in a browser and use as a decision‑support tool.
 
 ### Key features:
 
 - Sidebar controls:
-#### - Model selector (Prophet default, SARIMA option).
-#### - Forecast horizon slider (weeks ahead).
-#### - Toggles for Major events and Weather effects (wired to synthetic placeholders now; planned integration with real APIs later).
-#### - Option to show Original vs Updated forecast to illustrate how new data shifts predictions.
-
+  Model selector for choosing among Naive, Moving Average, Exponential Smoothing, Holt, Holt‑Winters, SARIMA, and (optionally) an experimental ML model.
+- Options checkboxes to:
+#### - Show the forecast table.
+#### - Show model comparison.
+#### - Generate an AI manager recommendation (Planning Assistant, PAi).
+#### - Include weather effects (rain/snow) via Open‑Meteo.
+#### - Include major events (concerts, rallies, holidays) via the Ticketmaster Discovery API.
+#### - Exclude 2023 from SARIMA training when desired.
+- Run forecast button to execute the selected configuration.
+  
 - Main view:
-#### - Summary panel (last historical week, selected model, forecast horizon).
-#### - Chart of historical weekly exposures plus forecast and uncertainty band.
-#### - Table of forecasted values with lower/upper bounds.
-#### - Optional chart comparing original vs updated forecast.
-#### - Narrative explanation written for non‑technical EMS managers.
+  A Forecast controls panel with:
+#### - Forecast horizon slider (1–24 weeks).
+#### - Year filter (e.g., “All years” or a specific year).
+#### - AI provider selector (Gemini, OpenAI, or None) for PAi.
+  A summary panel showing the last historical week, selected model, forecast horizon, and key context.
 
-Overall, the project is moving towards a practical forecasting product that supports proactive injury‑prevention decisions in EMS operations, leveraging the large NEMSIS public‑release dataset.
+  An interactive line chart displaying:
+#### - Historical weekly exposure counts.
+#### - Forward forecasts with optional uncertainty bands and overlays.
+  
+  An optional forecast table listing week start dates, point forecasts, and bounds.
+  A Backtest accuracy section summarizing MAE, RMSE, MAPE, and MAE as a percentage of the average weekly level.
+  An optional Ticketmaster events table when major‑event enrichment is enabled and data are available.
+
+### AI Planning Assistant (PAi)
+- The app integrates an AI Planning Assistant (PAi) that turns numeric forecasts and error metrics into short, manager‑friendly recommendations.
+- PAi uses Google’s Gemini API (and optionally OpenAI) with a structured prompt that includes:
+#### - A recent 8‑week exposure summary.
+#### - The next 4 weeks of forecasts.
+#### - Backtest metrics (MAE, RMSE, MAE % of level).
+#### - The chosen model and horizon.
+
+- It generates a 4–6 sentence narrative that:
+#### - Explains forecast levels and typical error in plain language.
+#### - Comments on reliability (e.g., whether RMSE is much higher than MAE).
+#### - Suggests practical actions related to staffing, training, and PPE planning.
+#### - Encourages cautious use when error is high.
+
+Overall, the project delivers a pragmatic forecasting product that uses routinely collected exposure data, simple time‑series methods, explicit accuracy feedback, and an AI narrative layer to support proactive injury‑prevention decisions in EMS operations.
 
 ## Installation
-These instructions explain how to set up the repository locally and run the Streamlit demo.
+These instructions explain how to set up the repository locally and run the Streamlit app.
 
 ### 1. Clone the repository
 - git clone https://github.com/dondemici/W26_4495_S2_DundeeA.git
@@ -63,30 +105,32 @@ Using venv:
 
 ### 3. Install Python dependencies
 Install the core packages manually:
-- pip install streamlit pandas numpy plotly prophet statsmodels sqlalchemy pyodbc
+- pip install streamlit pandas numpy statsmodels sqlalchemy pyodbc scikit-learn requests google-genai openai
+If you use Prophet or other optional libraries, install them separately and update the app configuration as needed.
 
-## Usage – See a Demo of the Product
-Run the Streamlit prototype locally to see the forecasting workflow end‑to‑end.
+## Usage – Run the EMS Forecaster
+Run the Streamlit app locally to see the end‑to‑end forecasting workflow.
 
-### From the repository root, locate the Streamlit app file (W26_4495_S2_DundeeA/Implementation/Product/):
-- ems_forecaster_app.py
+### From the repository root, locate the Streamlit app file, for example:Implementation/Product/forecaster_app.py
+(or your final filename, such as ems_forecaster_app.py).
 
 ### Run the Streamlit app:
-- streamlit run ems_forecaster_app.py
+- streamlit run Implementation/Product/forecaster_app.py
   
 ### Open the provided local URL (usually http://localhost:8501) in your browser.
 
 ### In the app:
-- Select the model (Prophet default or SARIMA).
-- Choose the forecast horizon in weeks.
-- Optionally toggle Major events and Weather effects (currently placeholder / synthetic integrations).
-- Click Run forecast to generate:
-#### - Historical vs forecast chart.
-#### - Forecast table with bounds.
-#### - Narrative explanation.
+- Choose a model (e.g., Naive, Moving Average, Exponential Smoothing, Holt, Holt‑Winters, SARIMA, or the experimental ML option).
+- In the sidebar, select which options to show (forecast table, model comparison, AI recommendation, weather effects, major events).
+- Click Run forecast.
+- In the main panel:
+#### - Adjust the forecast horizon (weeks).
+#### - Optionally filter by year and choose the AI provider for PAi.
+#### - Review the historical vs forecast chart and the forecast table.
+#### - Review backtest metrics (MAE, RMSE, MAPE, MAE % of level).
+#### - Read the PAi narrative if the AI recommendation option is enabled.
 
 ### To see the Original vs Updated forecast behavior, enable the checkbox in the sidebar and run the forecast again. The app will show how an updated series (with higher recent exposure counts) shifts the forecast upward, illustrating how the production system would respond to new weekly data.
-
 
 ## Project Team
 - Student: Dundee Adriatico
