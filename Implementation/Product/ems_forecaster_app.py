@@ -283,8 +283,9 @@ def fetch_ticketmaster_events(start_dt, end_dt):
 
     params = {
         "apikey": TM_API_KEY,
-        "countryCode": "CA",
-        "city": "Vancouver",
+        "latlong": "49.2827,-123.1207",
+        "radius": 250,
+        "unit": "km",
         "startDateTime": start_iso,
         "endDateTime": end_iso,
         "size": 200,
@@ -299,8 +300,10 @@ def fetch_ticketmaster_events(start_dt, end_dt):
         data = r.json()
 
         if "_embedded" not in data or "events" not in data["_embedded"]:
+            #st.write("Ticketmaster params used:", params)
+            #st.write("Ticketmaster raw response:", data)
             return pd.DataFrame(columns=["week_start", "n_events"])
-
+        
         events = data["_embedded"]["events"]
         for ev in events:
             # pick start date
@@ -381,8 +384,8 @@ with st.sidebar:
     show_model_comparison = st.checkbox("Show model comparison", value=False)
     #show_original_vs_updated = st.checkbox("Show original vs updated forecast", value=False)
     use_ai_recommendation = st.checkbox("Generate AI manager recommendation", value=False)
-    use_events = st.checkbox("Include major events (concerts, rallies, holidays)", value=False)
     use_weather = st.checkbox("Include weather effects (rain/snow)", value=False)
+    use_events = st.checkbox("Include major events (concerts, rallies, holidays)", value=False)
     exclude_2023_from_training = st.checkbox("Exclude 2023 from SARIMA training",value=True)
 
 
@@ -392,7 +395,13 @@ with st.sidebar:
 
 # Weather-enriched history
 # Define allowed weather window (from Open-Meteo error message)
+
 WEATHER_START = pd.to_datetime("2025-03-08")
+
+if "horizon_weeks" not in st.session_state:
+    st.session_state["horizon_weeks"] = 1
+
+horizon_weeks = st.session_state["horizon_weeks"]
 
 if use_weather:
     # Keep only weeks where we *can* get weather
@@ -448,21 +457,24 @@ else:
 # history_df: base weekly exposures
 # history_with_weather: either history_df or merged with weather
 base_for_events = history_with_weather.copy()
+history_with_events = base_for_events.copy()
+future_events_weekly = pd.DataFrame(columns=["week_start", "n_events"])
 
 if use_events:
-    events_weekly = fetch_ticketmaster_events(
-        base_for_events["week_start"].min(),
-        base_for_events["week_start"].max() + pd.Timedelta(weeks=horizon_weeks),
-    )
+    event_start = base_for_events["week_start"].max()
+    event_end = event_start + pd.Timedelta(weeks=horizon_weeks)
 
-    if not events_weekly.empty:
-        history_with_events = base_for_events.merge(
-            events_weekly, on="week_start", how="left"
+    future_events_weekly = fetch_ticketmaster_events(event_start, event_end)
+
+    if not future_events_weekly.empty:
+        st.subheader("Ticketmaster events retrieved")
+        st.dataframe(
+            future_events_weekly.sort_values("week_start"),
+            hide_index=True,
+            use_container_width=True,
         )
-        history_with_events["n_events"].fillna(0, inplace=True)
     else:
-        st.info("No Ticketmaster events found; running without event effects.")
-        history_with_events = base_for_events.copy()
+        st.info("No Ticketmaster events found for the selected date range.")
 else:
     history_with_events = base_for_events.copy()
 
@@ -1330,7 +1342,12 @@ else:
     )
 
     if use_events:
-        text += "In a future version, major events will be added as predictors. "
+        event_start = base_for_events["week_start"].min()
+        event_end = base_for_events["week_start"].max() + pd.Timedelta(weeks=horizon_weeks)
+
+        st.write("Ticketmaster request window:", event_start, "to", event_end)
+
+        events_weekly = fetch_ticketmaster_events(event_start, event_end)
 
     if use_weather and not history_with_weather.empty:
         corr_rain = history_with_weather["exposures"].corr(
